@@ -9,7 +9,7 @@ import CookingTracker from './components/CookingTracker';
 import Footer from './components/Footer';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types';
 import { getStoredPizzas, savePizzas, getStoredUser, saveUser, getStoredOrders, saveOrders, saveOrder, getStoredSpecial } from './store';
-import { Clock, CheckCircle2, ShoppingCart, Info, ShoppingBag, MapPin, Phone, Pizza as PizzaIcon, Package, Star, Heart, History, XCircle } from 'lucide-react';
+import { Clock, CheckCircle2, ShoppingCart, Info, ShoppingBag, MapPin, Phone, Pizza as PizzaIcon, Package, Star, Heart, History, XCircle, Zap, ShieldCheck, Smile, Utensils } from 'lucide-react';
 
 interface FlyingPizza {
   id: string;
@@ -27,7 +27,6 @@ const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notification, setNotification] = useState<string | null>(null);
-  const [isBumping, setIsBumping] = useState(false);
   const [flyingPizzas, setFlyingPizzas] = useState<FlyingPizza[]>([]);
   
   const [siteSpecial, setSiteSpecial] = useState<SiteSpecial>(getStoredSpecial());
@@ -43,16 +42,10 @@ const App: React.FC = () => {
     if (currentView === 'home' || currentView === 'admin') {
       setSiteSpecial(getStoredSpecial());
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentView]);
 
   const cartCount = useMemo(() => cartItems.reduce((acc, item) => acc + item.quantity, 0), [cartItems]);
-
-  useEffect(() => {
-    if (cartCount === 0) return;
-    setIsBumping(true);
-    const timer = setTimeout(() => setIsBumping(false), 300);
-    return () => clearTimeout(timer);
-  }, [cartCount]);
 
   const activePreparingOrder = useMemo(() => {
     return orders.find(o => o.status === 'preparing');
@@ -76,7 +69,7 @@ const App: React.FC = () => {
         return [...prev, { ...pizza, quantity: 1 }];
       });
       setFlyingPizzas(prev => prev.filter(p => p.id !== id));
-      setNotification(`${pizza.name} додано!`);
+      setNotification(`${pizza.name} додано до кошика!`);
       setTimeout(() => setNotification(null), 2000);
     }, 700);
   };
@@ -116,7 +109,7 @@ const App: React.FC = () => {
     setCartItems([]);
     setIsCartOpen(false);
     
-    alert('Ваше замовлення прийнято! Слідкуйте за статусом в історії.');
+    alert('Дякуємо! Ваше замовлення прийнято.');
     setCurrentView('history');
   };
 
@@ -136,7 +129,7 @@ const App: React.FC = () => {
   };
 
   const handleCancelOrder = (orderId: string) => {
-    if (confirm('Ви впевнені, що хочете скасувати замовлення?')) {
+    if (confirm('Скасувати замовлення?')) {
       const updatedOrders = orders.map(o => o.id === orderId ? { ...o, status: 'cancelled' as OrderStatus } : o);
       setOrders(updatedOrders);
       saveOrders(updatedOrders);
@@ -181,7 +174,7 @@ const App: React.FC = () => {
   const showMobileNav = !isCartOpen && !isAuthOpen && currentView !== 'admin';
 
   return (
-    <div className="min-h-screen pb-24 md:pb-0 relative bg-[#fffaf5]">
+    <div className="min-h-screen pb-24 md:pb-0 relative bg-[#fffaf5] text-black selection:bg-orange-100 selection:text-orange-900">
       <Header 
         user={user} 
         onOpenAuth={() => setIsAuthOpen(true)}
@@ -190,118 +183,183 @@ const App: React.FC = () => {
         onOpenCart={() => setIsCartOpen(true)}
       />
 
-      <main className="container mx-auto px-4 py-8 min-h-[60vh]">
+      {/* Landing Page Content Only for Home View */}
+      {currentView === 'home' && (
+        <div className="animate-in fade-in duration-700">
+          {/* Hero Section */}
+          <section className="relative h-[80vh] min-h-[500px] flex items-center justify-center overflow-hidden">
+             <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-[0.4] scale-105 animate-pulse-slow" alt="P2Pizza Hero" />
+             <div className="container mx-auto px-4 z-10 text-center text-white">
+                <span className="inline-block bg-orange-500 px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest mb-6 animate-bounce">
+                  {siteSpecial.badge}
+                </span>
+                <h1 className="text-5xl md:text-8xl font-black mb-6 tracking-tighter leading-none drop-shadow-2xl">
+                  {siteSpecial.title}
+                </h1>
+                <p className="text-xl md:text-2xl font-medium text-gray-200 max-w-2xl mx-auto mb-10 drop-shadow">
+                  {siteSpecial.description}
+                </p>
+                <div className="flex flex-wrap justify-center gap-6">
+                   <button 
+                    onClick={() => {
+                        const el = document.getElementById('menu-start');
+                        el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="bg-orange-500 hover:bg-white hover:text-orange-600 text-white px-10 py-5 rounded-full font-black uppercase tracking-widest transition-all shadow-2xl active:scale-95"
+                   >
+                     Замовити зараз
+                   </button>
+                   <button 
+                    onClick={() => setCurrentView('promotions')}
+                    className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border-2 border-white/30 px-10 py-5 rounded-full font-black uppercase tracking-widest transition-all active:scale-95"
+                   >
+                     Наші Акції
+                   </button>
+                </div>
+             </div>
+          </section>
+
+          {/* Features Section */}
+          <section className="py-24 bg-white">
+            <div className="container mx-auto px-4">
+               <div className="text-center mb-16">
+                  <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-4">Чому обирають <span className="text-orange-500">P2PIZZA</span>?</h2>
+                  <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Ми робимо більше, ніж просто їжу</p>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                  {[
+                    { icon: Zap, title: "Швидкість", desc: "Приготування за 8 хвилин. Доставка по місту до 40 хвилин." },
+                    { icon: ShieldCheck, title: "Якість", desc: "Тільки свіжі інгредієнти від перевірених фермерів." },
+                    { icon: Smile, title: "Смак", desc: "Авторські рецепти, які ви не знайдете в інших місцях." }
+                  ].map((f, i) => (
+                    <div key={i} className="flex flex-col items-center text-center p-8 rounded-[3rem] bg-[#fffaf5] border border-orange-50 hover:shadow-xl transition-all">
+                       <div className="w-16 h-16 bg-orange-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                          <f.icon size={32} />
+                       </div>
+                       <h3 className="text-2xl font-black mb-4 uppercase">{f.title}</h3>
+                       <p className="text-gray-500 font-medium leading-relaxed">{f.desc}</p>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          </section>
+
+          {/* How it Works Section */}
+          <section className="py-24 bg-[#fffaf5]">
+            <div className="container mx-auto px-4">
+               <div className="flex flex-col md:flex-row items-center gap-16">
+                  <div className="md:w-1/2">
+                     <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-8 leading-none">Від вашого замовлення до <span className="text-orange-500">першого шматочка</span></h2>
+                     <div className="space-y-8">
+                        {[
+                          { step: "01", title: "Оберіть улюблену піцу", desc: "Перегляньте наше меню та додайте страви до кошика." },
+                          { step: "02", title: "Ми починаємо магію", desc: "Наші піцайоло готують ваше замовлення зі свіжого тіста." },
+                          { step: "03", title: "Гаряча доставка", desc: "Кур'єр привозить замовлення ще гарячим прямо до дверей." }
+                        ].map((s, i) => (
+                          <div key={i} className="flex gap-6 items-start">
+                             <span className="text-4xl font-black text-orange-200">{s.step}</span>
+                             <div>
+                                <h4 className="text-xl font-black uppercase mb-1">{s.title}</h4>
+                                <p className="text-gray-500 font-medium">{s.desc}</p>
+                             </div>
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+                  <div className="md:w-1/2 relative">
+                     <div className="rounded-[4rem] overflow-hidden shadow-2xl rotate-3">
+                        <img src="https://images.unsplash.com/photo-1590947132387-155cc02f3212?auto=format&fit=crop&q=80&w=800" alt="Cooking" className="w-full h-full object-cover" />
+                     </div>
+                     <div className="absolute -bottom-10 -left-10 bg-white p-8 rounded-[2rem] shadow-xl border border-orange-50 hidden lg:block animate-bounce-slow">
+                        <div className="flex items-center gap-4">
+                           <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white">
+                              <Utensils size={24} />
+                           </div>
+                           <div>
+                              <p className="font-black text-sm uppercase">1000+ замовлень</p>
+                              <p className="text-[10px] text-gray-400 font-bold">Сьогодні у вашому місті</p>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Main Menu Section (Shared for all views except Home-landing) */}
+      <main id="menu-start" className="container mx-auto px-4 py-16 min-h-[60vh]">
         {activePreparingOrder && (
           <div className="max-w-xl mx-auto mb-16">
-            <div className="flex items-center gap-2 mb-4 justify-center text-orange-600 font-black uppercase text-xs tracking-widest">
-                <Info size={16} /> Поточне замовлення {activePreparingOrder.id}
+            <div className="flex items-center gap-2 mb-4 justify-center text-orange-600 font-black uppercase text-xs tracking-widest animate-pulse">
+                <Info size={16} /> Поточне замовлення {activePreparingOrder.id} - Готується
             </div>
             <CookingTracker startTime={activePreparingOrder.preparingStartTime!} />
           </div>
         )}
 
-        {currentView === 'home' && (
-          <section className="mb-12 relative rounded-[3rem] overflow-hidden h-[300px] md:h-[500px] shadow-2xl border-4 border-white">
-            <img src={siteSpecial.image} className="w-full h-full object-cover brightness-[0.45] transition-all duration-700" alt="Promo" />
-            <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-16 text-white">
-              <span className="bg-orange-500 w-fit px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 animate-bounce">
-                {siteSpecial.badge}
-              </span>
-              <h1 className="text-4xl md:text-7xl font-black mb-4 leading-none tracking-tighter max-w-3xl drop-shadow-lg">
-                {siteSpecial.title}
-              </h1>
-              <p className="text-lg md:text-2xl text-gray-200 max-w-xl mb-8 font-medium drop-shadow">
-                {siteSpecial.description}
-              </p>
-              <div className="flex flex-wrap gap-4">
-                  <button onClick={() => setCurrentView('promotions')} className="bg-orange-500 text-white w-fit px-10 py-4 rounded-[2rem] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-orange-500/20 active:scale-95">Дивитись акції</button>
-              </div>
-            </div>
-          </section>
-        )}
-
-        <div className="mb-10">
-          <h2 className="text-4xl font-black uppercase tracking-tighter flex items-center gap-4 text-black">
-            {currentView === 'home' && 'Наше меню піци'}
+        <div className="mb-12">
+          <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter flex items-center gap-6">
+            {currentView === 'home' && 'Наше Меню'}
             {currentView === 'box' && 'BOX-меню та закуски'}
-            {currentView === 'promotions' && 'Гарячі акції'}
+            {currentView === 'promotions' && 'Акційні пропозиції'}
             {currentView === 'new' && 'Останні новинки'}
-            {currentView === 'favorites' && 'Твоє улюблене'}
-            {currentView === 'history' && 'Твої замовлення'}
-            <div className="h-1.5 flex-grow bg-orange-100 rounded-full hidden md:block" />
+            {currentView === 'favorites' && 'Ваше улюблене'}
+            {currentView === 'history' && 'Історія замовлень'}
+            <div className="h-2 flex-grow bg-orange-100 rounded-full hidden md:block" />
           </h2>
         </div>
 
         {currentView === 'history' ? (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-bottom duration-500">
             {orders.length === 0 ? (
-              <div className="text-center py-32 bg-white rounded-[3rem] shadow-sm border border-gray-100">
+              <div className="text-center py-32 bg-white rounded-[3rem] shadow-sm border border-orange-50">
                 <ShoppingBag className="w-20 h-20 mx-auto text-gray-100 mb-6" />
-                <p className="text-gray-400 font-black uppercase tracking-widest text-sm">Історія замовлень порожня</p>
+                <p className="text-gray-400 font-black uppercase tracking-widest text-sm">Ви ще нічого не замовляли</p>
+                <button onClick={() => setCurrentView('home')} className="mt-6 text-orange-500 font-black uppercase text-xs hover:underline">Перейти до меню</button>
               </div>
             ) : (
               orders.map(order => (
-                <div key={order.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-orange-50 flex flex-col md:flex-row gap-8 items-center text-black">
+                <div key={order.id} className="bg-white p-8 rounded-[3rem] shadow-sm border border-orange-50 flex flex-col md:flex-row gap-8 items-center transition-all hover:shadow-md">
                   <div className="flex-grow w-full">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-4">
                         <span className="text-[10px] font-black bg-black text-white px-3 py-1 rounded-lg uppercase tracking-widest">{order.id}</span>
-                        <span className="text-gray-400 text-xs font-bold">{order.date}</span>
+                        <span className="text-gray-400 text-[10px] font-bold uppercase">{order.date}</span>
                       </div>
-                      <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${order.paymentMethod === 'card_on_receipt' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'}`}>
+                      <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${order.paymentMethod === 'card_on_receipt' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'}`}>
                         {order.paymentMethod === 'card_on_receipt' ? 'Картою' : 'Готівка'}
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex flex-wrap gap-2 mb-6">
                       {order.items.map(item => (
-                        <span key={item.id} className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-tight">
+                        <span key={item.id} className="bg-[#fffaf5] border border-orange-100 text-orange-600 px-3 py-2 rounded-xl text-xs font-black uppercase">
                           {item.name} x{item.quantity}
                         </span>
                       ))}
                     </div>
 
-                    {order.type === 'delivery' && (
-                      <div className="bg-gray-50 p-4 rounded-2xl mb-4 space-y-1">
-                         <div className="flex items-center gap-2 text-xs font-black uppercase text-black">
-                            <MapPin size={14} className="text-orange-500" /> {order.address}, {order.houseNumber}
-                         </div>
-                         <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500">
-                            <Phone size={12} className="text-orange-500" /> {order.phone}
-                         </div>
-                      </div>
-                    )}
-
-                    {order.notes && (
-                      <div className="bg-orange-50/50 p-4 rounded-2xl mb-4 border border-orange-100">
-                         <div className="text-[10px] font-black uppercase text-orange-600 mb-1">Коментар до замовлення:</div>
-                         <div className="text-xs font-medium text-black italic">"{order.notes}"</div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-500"><Clock size={16} className="text-orange-500" /> {order.type === 'delivery' ? 'Доставка' : 'Самовивіз'}</div>
-                      <div className={`flex items-center gap-2 text-xs font-black uppercase ${order.status === 'completed' || order.status === 'delivered' ? 'text-green-600' : order.status === 'cancelled' ? 'text-red-500' : 'text-orange-600'}`}>
+                    <div className="flex flex-wrap items-center gap-6">
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500"><Clock size={16} className="text-orange-500" /> {order.type === 'delivery' ? 'Доставка' : 'Самовивіз'}</div>
+                      <div className={`flex items-center gap-2 text-[10px] font-black uppercase ${order.status === 'completed' || order.status === 'delivered' ? 'text-green-600' : order.status === 'cancelled' ? 'text-red-500' : 'text-orange-600'}`}>
                         {order.status === 'completed' || order.status === 'delivered' ? <CheckCircle2 size={16} /> : order.status === 'cancelled' ? <XCircle size={16} /> : <div className="w-4 h-4 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />}
                         {order.status === 'pending' ? 'Очікує' : order.status === 'preparing' ? 'Готується' : order.status === 'ready' ? 'Готово' : order.status === 'delivered' ? 'Доставлено' : order.status === 'cancelled' ? 'Скасовано' : 'Виконано'}
                       </div>
                     </div>
                   </div>
-                  <div className="text-center md:text-right min-w-[150px] border-t md:border-t-0 md:border-l pt-6 md:pt-0 md:pl-8 flex flex-col items-center md:items-end">
-                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">Разом</p>
-                    <p className="text-3xl font-black text-black mb-4">{order.total} <span className="text-sm font-bold text-orange-500">грн</span></p>
+                  <div className="text-center md:text-right min-w-[160px] border-t md:border-t-0 md:border-l pt-6 md:pt-0 md:pl-8 flex flex-col items-center md:items-end">
+                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">До сплати</p>
+                    <p className="text-3xl font-black text-black mb-6">{order.total} <span className="text-sm font-bold text-orange-500">грн</span></p>
                     
                     {order.status === 'pending' && (
                       <button 
                         onClick={() => handleCancelOrder(order.id)}
-                        className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition-all border border-red-100"
+                        className="flex items-center gap-2 bg-red-50 text-red-600 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all border border-red-100"
                       >
                         <XCircle size={14} /> Скасувати
                       </button>
-                    )}
-                    
-                    {(order.status === 'completed' || order.status === 'delivered' || order.status === 'cancelled') && (
-                      <button className="text-orange-500 text-[10px] font-black uppercase tracking-widest hover:text-black transition-colors">Повторити</button>
                     )}
                   </div>
                 </div>
@@ -309,7 +367,7 @@ const App: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-12 animate-in fade-in duration-500">
             {filteredPizzas.map(pizza => (
               <PizzaCard key={pizza.id} pizza={pizza} onAddToCart={handleAddToCart} isFavorite={user?.favorites.includes(pizza.id) || false} onToggleFavorite={handleToggleFavorite} />
             ))}
@@ -322,34 +380,28 @@ const App: React.FC = () => {
 
       {/* Mobile Bottom Navigation */}
       {showMobileNav && (
-        <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/80 backdrop-blur-xl border-t border-orange-100 flex items-center justify-around px-2 py-3 md:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.05)] animate-in slide-in-from-bottom duration-300 pb-safe">
+        <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/90 backdrop-blur-xl border-t border-orange-100 flex items-center justify-around px-2 py-4 md:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)] pb-safe">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
-            
             if (item.requireAuth && !user) return null;
-
             return (
               <button
                 key={item.id}
                 onClick={() => setCurrentView(item.id)}
-                className={`flex flex-col items-center gap-1.5 transition-all duration-300 relative ${isActive ? 'text-orange-500 scale-110' : 'text-gray-400'}`}
+                className={`flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-orange-500 scale-110' : 'text-gray-400'}`}
               >
-                <Icon size={22} className={isActive ? 'fill-orange-50' : ''} />
-                <span className="text-[10px] font-black uppercase tracking-tight">{item.label}</span>
-                {isActive && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-1 h-1 bg-orange-500 rounded-full" />
-                )}
+                <Icon size={24} className={isActive ? 'fill-orange-50' : ''} />
+                <span className="text-[9px] font-black uppercase tracking-tighter">{item.label}</span>
               </button>
             );
           })}
-          {/* Special mobile cart button integration */}
           <button 
             onClick={() => setIsCartOpen(true)}
-            className={`flex flex-col items-center gap-1.5 transition-all duration-300 relative ${cartCount > 0 ? 'text-black' : 'text-gray-400'}`}
+            className={`flex flex-col items-center gap-1 transition-all duration-300 relative ${cartCount > 0 ? 'text-black' : 'text-gray-400'}`}
           >
-            <ShoppingCart size={22} />
-            <span className="text-[10px] font-black uppercase tracking-tight">Кошик</span>
+            <ShoppingCart size={24} />
+            <span className="text-[9px] font-black uppercase tracking-tighter">Кошик</span>
             {cartCount > 0 && (
               <span className="absolute -top-1 -right-2 bg-orange-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">
                 {cartCount}
@@ -359,48 +411,56 @@ const App: React.FC = () => {
         </nav>
       )}
 
-      {/* Flying Pizza Animation Elements */}
+      {/* Flying Animation */}
       {flyingPizzas.map(p => (
         <div 
           key={p.id}
-          className="fixed z-[200] w-32 h-32 rounded-full shadow-2xl pointer-events-none"
+          className="fixed z-[200] w-24 h-24 rounded-full shadow-2xl pointer-events-none"
           style={{
             left: p.startX,
             top: p.startY,
-            animation: 'flyToCart 0.7s cubic-bezier(0.42, 0, 0.58, 1) forwards',
+            animation: 'flyToCart 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
           }}
         >
-          <img src={p.image} className="w-full h-full object-cover rounded-full border-4 border-white" alt="Flying Pizza" />
+          <img src={p.image} className="w-full h-full object-cover rounded-full border-4 border-white shadow-xl" alt="Flying Pizza" />
         </div>
       ))}
 
       <style>{`
         @keyframes flyToCart {
-          0% { 
-            transform: scale(1) rotate(0deg); 
-            opacity: 1; 
-          }
-          40% {
-            transform: scale(0.6) rotate(180deg);
-            opacity: 1;
-          }
+          0% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+          40% { transform: scale(0.8) rotate(180deg); opacity: 1; }
           100% { 
-            left: calc(100vw - 180px); 
+            left: calc(100vw - 150px); 
             top: 20px; 
             transform: scale(0.1) rotate(720deg); 
             opacity: 0; 
           }
         }
-        @media (max-width: 1024px) {
+        @media (max-width: 768px) {
           @keyframes flyToCart {
-            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            0% { transform: scale(1.2) rotate(0deg); opacity: 1; }
             100% { 
-              left: calc(100vw - 120px); 
-              top: calc(100vh - 120px); 
+              left: calc(100vw - 100px); 
+              top: calc(100vh - 80px); 
               transform: scale(0.1) rotate(720deg); 
               opacity: 0; 
             }
           }
+        }
+        @keyframes bounce-slow {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .animate-bounce-slow {
+          animation: bounce-slow 4s infinite ease-in-out;
+        }
+        @keyframes pulse-slow {
+          0%, 100% { transform: scale(1.05); }
+          50% { transform: scale(1); }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 20s infinite ease-in-out;
         }
       `}</style>
 
@@ -409,7 +469,7 @@ const App: React.FC = () => {
       {currentView === 'admin' && user?.role === 'admin' && <AdminPanel pizzas={pizzas} onUpdatePizzas={(newPizzas) => { setPizzas(newPizzas); savePizzas(newPizzas); }} orders={orders} onUpdateOrderStatus={onUpdateOrderStatus} onClose={() => setCurrentView('home')} />}
 
       {notification && (
-        <div className="fixed bottom-36 right-8 z-[110] bg-black text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest shadow-2xl animate-in fade-in slide-in-from-right duration-300 border border-orange-500">
+        <div className="fixed bottom-32 md:bottom-12 right-6 z-[110] bg-black text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest shadow-2xl animate-in slide-in-from-right duration-300 border border-orange-500">
           {notification}
         </div>
       )}
