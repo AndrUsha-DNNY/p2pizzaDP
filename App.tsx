@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import Header from './components/Header.tsx';
 import PizzaCard from './components/PizzaCard.tsx';
 import Cart from './components/Cart.tsx';
@@ -234,6 +235,7 @@ const App: React.FC = () => {
           100% { left: 90%; top: 5%; transform: scale(0.1) rotate(360deg); opacity: 0; } 
         }
       `}</style>
+      <Analytics />
     </div>
   );
 };
