@@ -1,6 +1,14 @@
 {
-  "name": "P2Pizza - Найкраща піца в місті",
-  "description": "Професійна платформа для замовлення піци з доставкою, акціями та адмін-панеллю.",
+  "name": "P2PIZZA | Найкраща піца у місті",
+  "short_name": "P2PIZZA",
+  "description": "Замовляйте найсмачнішу піцу від P2PIZZA. Швидка доставка, унікальні рецепти та вигідні акції.",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/3ykCjFz/p2p-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ],
   "requestFramePermissions": [
     "geolocation"
   ]

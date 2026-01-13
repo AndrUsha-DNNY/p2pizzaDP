@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { X, Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Mail, Lock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { User } from '../types';
-import { getAdminPassword, getRegisteredUsers, registerNewUser } from '../store';
+import { getAdminPassword, getRegisteredUsers, registerNewUser, getStoredLogo } from '../store';
 
 interface AuthProps {
   isOpen: boolean;
@@ -18,13 +18,13 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const logo = getStoredLogo();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    // Validation: Password length 8 to 16
     if (password.length < 8 || password.length > 16) {
       setError('Пароль має бути від 8 до 16 символів');
       return;
@@ -33,18 +33,16 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
     const registeredUsers = getRegisteredUsers();
 
     if (isRegister) {
-      // Check if account already exists
       const exists = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
       if (exists) {
         setError('Такий акаунт вже є');
         return;
       }
 
-      // Simulation: register user
       const newUser = {
         id: 'user-' + Date.now(),
         email: email.toLowerCase(),
-        password: password, // In a real app, this would be hashed
+        password: password,
         name: email.split('@')[0],
         role: 'user',
         favorites: [],
@@ -56,7 +54,6 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
       setIsRegister(false);
       setPassword('');
     } else {
-      // Admin login logic
       if (email.toLowerCase() === 'admin@p2pizza.com') {
         const storedAdminPass = getAdminPassword();
         if (password === storedAdminPass) {
@@ -75,7 +72,6 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
         return;
       }
 
-      // Check if user exists in simulation DB
       const user = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
       
       if (!user) {
@@ -98,31 +94,37 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-black">
+      <div className="relative w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-black text-center">
         <button onClick={onClose} className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
           <X size={24} />
         </button>
 
         {currentUser ? (
-          <div className="text-center py-6">
-            <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <UserIcon size={40} />
+          <div className="py-6">
+            <div className="w-24 h-24 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl overflow-hidden border-4 border-white">
+              <img src={logo} alt="P2Pizza User" className="w-full h-full object-cover" />
             </div>
             <h2 className="text-2xl font-black mb-1 uppercase tracking-tight">{currentUser.name}</h2>
-            <p className="text-gray-500 mb-6 font-medium">{currentUser.email}</p>
+            <p className="text-gray-400 mb-8 font-bold text-xs uppercase tracking-widest">{currentUser.email}</p>
             <button 
               onClick={onLogout}
-              className="w-full py-4 rounded-2xl bg-red-50 text-red-600 font-black uppercase text-sm hover:bg-red-100 transition-colors"
+              className="w-full py-4 rounded-2xl bg-black text-white font-black uppercase text-sm hover:bg-orange-600 transition-all shadow-lg active:scale-95"
             >
               Вийти з акаунту
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit}>
-            <h2 className="text-3xl font-black mb-2 uppercase tracking-tight leading-none">
+          <form onSubmit={handleSubmit} className="text-left">
+            <div className="flex justify-center mb-8">
+               <div className="w-20 h-20 bg-orange-500 rounded-2xl overflow-hidden shadow-lg">
+                  <img src={logo} alt="P2Pizza Logo" className="w-full h-full object-cover" />
+               </div>
+            </div>
+            
+            <h2 className="text-3xl font-black mb-2 uppercase tracking-tight leading-none text-center">
               {isRegister ? 'Створити акаунт' : 'Увійти до P2P'}
             </h2>
-            <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mb-8">
+            <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mb-8 text-center">
               {isRegister ? 'Приєднуйтесь до нашої піца-родини' : 'Ваша улюблена піца чекає'}
             </p>
 

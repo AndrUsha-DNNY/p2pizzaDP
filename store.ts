@@ -10,8 +10,11 @@ const STORAGE_KEYS = {
   SITE_LOGO: 'p2pizza_site_logo',
   SITE_SPECIAL: 'p2pizza_site_special',
   SHOP_PHONE: 'p2pizza_shop_phone',
-  REGISTERED_USERS: 'p2pizza_registered_users', // New key for simulated DB
+  REGISTERED_USERS: 'p2pizza_registered_users',
 };
+
+// Official P2Pizza Logo from the provided image
+const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
 export const getStoredPizzas = (): Pizza[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PIZZAS);
@@ -32,7 +35,6 @@ export const saveUser = (user: User | null) => {
   else localStorage.removeItem(STORAGE_KEYS.USER);
 };
 
-// Simulated Database helper for users
 export const getRegisteredUsers = (): any[] => {
   const data = localStorage.getItem(STORAGE_KEYS.REGISTERED_USERS);
   return data ? JSON.parse(data) : [];
@@ -67,7 +69,7 @@ export const saveAdminPassword = (password: string) => {
 };
 
 export const getStoredLogo = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
+  return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
 };
 
 export const saveLogo = (logoBase64: string) => {

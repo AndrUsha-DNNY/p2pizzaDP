@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import Header from './components/Header';
-import PizzaCard from './components/PizzaCard';
-import Cart from './components/Cart';
-import Auth from './components/Auth';
-import AdminPanel from './components/AdminPanel';
-import CookingTracker from './components/CookingTracker';
-import Footer from './components/Footer';
-import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types';
-import { getStoredPizzas, savePizzas, getStoredUser, saveUser, getStoredOrders, saveOrders, saveOrder, getStoredSpecial } from './store';
+import Header from './components/Header.tsx';
+import PizzaCard from './components/PizzaCard.tsx';
+import Cart from './components/Cart.tsx';
+import Auth from './components/Auth.tsx';
+import AdminPanel from './components/AdminPanel.tsx';
+import CookingTracker from './components/CookingTracker.tsx';
+import Footer from './components/Footer.tsx';
+import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
+import { getStoredPizzas, savePizzas, getStoredUser, saveUser, getStoredOrders, saveOrders, saveOrder, getStoredSpecial } from './store.ts';
 import { Clock, CheckCircle2, ShoppingCart, Info, ShoppingBag, MapPin, Phone, Pizza as PizzaIcon, Package, Star, Heart, History, XCircle, Zap, ShieldCheck, Smile, Utensils } from 'lucide-react';
 
 interface FlyingPizza {

@@ -1,5 +1,5 @@
 {
-  "name": "p2pizza---найкраща-піца-в-місті",
+  "name": "p2pizza-|-найкраща-піца-у-місті",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lucide-react": "^0.562.0",
+    "lucide-react": "0.462.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
