@@ -8,8 +8,16 @@ import AdminPanel from './components/AdminPanel.tsx';
 import CookingTracker from './components/CookingTracker.tsx';
 import Footer from './components/Footer.tsx';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
-import { getStoredPizzas, savePizzas, getStoredUser, saveUser, getStoredOrders, saveOrders, saveOrder, getStoredSpecial } from './store.ts';
-import { Clock, CheckCircle2, ShoppingCart, Info, ShoppingBag, MapPin, Phone, Pizza as PizzaIcon, Package, Star, Heart, History, XCircle, Zap, ShieldCheck, Smile, Utensils } from 'lucide-react';
+import { 
+  getStoredPizzas, savePizzas, getStoredUser, saveUser, 
+  getStoredOrders, saveOrders, saveOrder, getStoredSpecial, 
+  getTelegramConfig 
+} from './store.ts';
+import { 
+  Clock, CheckCircle2, ShoppingCart, Info, ShoppingBag, MapPin, 
+  Phone, Pizza as PizzaIcon, Package, Star, Heart, History, 
+  XCircle, Zap, ShieldCheck, Smile, Utensils 
+} from 'lucide-react';
 
 interface FlyingPizza {
   id: string;
@@ -50,6 +58,49 @@ const App: React.FC = () => {
   const activePreparingOrder = useMemo(() => {
     return orders.find(o => o.status === 'preparing');
   }, [orders]);
+
+  const sendTelegramNotification = async (order: Order) => {
+    const { token, chatId } = getTelegramConfig();
+    if (!token || !chatId) return;
+
+    const itemsList = order.items.map(i => `• <b>${i.name}</b> x${i.quantity} (${i.price * i.quantity} грн)`).join('\n');
+    const typeStr = order.type === 'delivery' ? '🚀 Доставка' : '🥡 Самовивіз';
+    const payStr = order.paymentMethod === 'card_on_receipt' ? '💳 Картою' : '💵 Готівкою';
+    
+    let message = `🆕 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>\n\n`;
+    message += `${itemsList}\n\n`;
+    message += `💰 <b>Сума:</b> ${order.total} грн\n`;
+    message += `📍 <b>Тип:</b> ${typeStr}\n`;
+    message += `💳 <b>Оплата:</b> ${payStr}\n`;
+
+    if (order.type === 'delivery') {
+      message += `🏠 <b>Адреса:</b> ${order.address}, буд. ${order.houseNumber}\n`;
+    } else {
+      message += `⏰ <b>Час:</b> ${order.pickupTime}\n`;
+    }
+
+    if (order.phone) {
+      message += `📞 <b>Телефон:</b> ${order.phone}\n`;
+    }
+    
+    if (order.notes) {
+      message += `📝 <b>Коментар:</b> <i>${order.notes}</i>\n`;
+    }
+
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: 'HTML'
+        })
+      });
+    } catch (e) {
+      console.error('Telegram notification failed', e);
+    }
+  };
 
   const handleAddToCart = (pizza: Pizza, rect: DOMRect) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -106,6 +157,8 @@ const App: React.FC = () => {
     
     saveOrder(newOrder);
     setOrders(prev => [newOrder, ...prev]);
+    sendTelegramNotification(newOrder); // Sending notification to TG
+    
     setCartItems([]);
     setIsCartOpen(false);
     

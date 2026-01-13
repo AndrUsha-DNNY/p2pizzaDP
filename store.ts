@@ -11,9 +11,10 @@ const STORAGE_KEYS = {
   SITE_SPECIAL: 'p2pizza_site_special',
   SHOP_PHONE: 'p2pizza_shop_phone',
   REGISTERED_USERS: 'p2pizza_registered_users',
+  TG_TOKEN: 'p2pizza_tg_token',
+  TG_CHAT_ID: 'p2pizza_tg_chat_id',
 };
 
-// Official P2Pizza Logo from the provided image
 const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
 export const getStoredPizzas = (): Pizza[] => {
@@ -96,4 +97,14 @@ export const getStoredSpecial = (): SiteSpecial => {
 
 export const saveSpecial = (special: SiteSpecial) => {
   localStorage.setItem(STORAGE_KEYS.SITE_SPECIAL, JSON.stringify(special));
+};
+
+export const getTelegramConfig = () => ({
+  token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
+  chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
+});
+
+export const saveTelegramConfig = (token: string, chatId: string) => {
+  localStorage.setItem(STORAGE_KEYS.TG_TOKEN, token);
+  localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
 };
