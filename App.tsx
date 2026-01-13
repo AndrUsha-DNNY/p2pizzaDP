@@ -46,6 +46,29 @@ const App: React.FC = () => {
     setSiteSpecial(getStoredSpecial());
   }, []);
 
+  // Handling deep links from Telegram for status updates
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const orderId = params.get('oid');
+    const newStatus = params.get('status') as OrderStatus;
+
+    if (action === 'set_status' && orderId && newStatus) {
+      // Check if user is logged in as admin
+      const currentUser = getStoredUser();
+      if (currentUser?.role === 'admin') {
+        onUpdateOrderStatus(orderId, newStatus);
+        setNotification(`Замовлення ${orderId} змінено на ${newStatus}`);
+        setTimeout(() => setNotification(null), 3000);
+        // Clear URL parameters
+        window.history.replaceState({}, '', window.location.origin);
+      } else {
+        setNotification("Увійдіть як адмін для зміни статусу");
+        setIsAuthOpen(true);
+      }
+    }
+  }, [user, orders]);
+
   useEffect(() => {
     if (currentView === 'home' || currentView === 'admin') {
       setSiteSpecial(getStoredSpecial());
@@ -63,29 +86,33 @@ const App: React.FC = () => {
     const { token, chatId } = getTelegramConfig();
     if (!token || !chatId) return;
 
-    const itemsList = order.items.map(i => `• <b>${i.name}</b> x${i.quantity} (${i.price * i.quantity} грн)`).join('\n');
+    const itemsList = order.items.map(i => `• <b>${i.name}</b> x${i.quantity}`).join('\n');
     const typeStr = order.type === 'delivery' ? '🚀 Доставка' : '🥡 Самовивіз';
-    const payStr = order.paymentMethod === 'card_on_receipt' ? '💳 Картою' : '💵 Готівкою';
     
-    let message = `🆕 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>\n\n`;
-    message += `${itemsList}\n\n`;
-    message += `💰 <b>Сума:</b> ${order.total} грн\n`;
-    message += `📍 <b>Тип:</b> ${typeStr}\n`;
-    message += `💳 <b>Оплата:</b> ${payStr}\n`;
-
+    let text = `🆕 <b>ЗАМОВЛЕННЯ ${order.id}</b>\n\n`;
+    text += `${itemsList}\n\n`;
+    text += `💰 <b>Сума:</b> ${order.total} грн\n`;
+    text += `📍 <b>Тип:</b> ${typeStr}\n`;
+    
     if (order.type === 'delivery') {
-      message += `🏠 <b>Адреса:</b> ${order.address}, буд. ${order.houseNumber}\n`;
-    } else {
-      message += `⏰ <b>Час:</b> ${order.pickupTime}\n`;
+      text += `🏠 <b>Адреса:</b> ${order.address}, ${order.houseNumber}\n`;
     }
+    if (order.phone) text += `📞 <b>Тел:</b> ${order.phone}\n`;
 
-    if (order.phone) {
-      message += `📞 <b>Телефон:</b> ${order.phone}\n`;
-    }
-    
-    if (order.notes) {
-      message += `📝 <b>Коментар:</b> <i>${order.notes}</i>\n`;
-    }
+    // Inline buttons that link back to the site with action parameters
+    const baseUrl = window.location.origin;
+    const reply_markup = {
+      inline_keyboard: [
+        [
+          { text: '👨‍🍳 Готується', url: `${baseUrl}?action=set_status&oid=${order.id}&status=preparing` },
+          { text: '✅ Готово', url: `${baseUrl}?action=set_status&oid=${order.id}&status=ready` }
+        ],
+        [
+          { text: '🚚 Доставлено', url: `${baseUrl}?action=set_status&oid=${order.id}&status=delivered` },
+          { text: '📦 Виконано', url: `${baseUrl}?action=set_status&oid=${order.id}&status=completed` }
+        ]
+      ]
+    };
 
     try {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -93,8 +120,9 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: message,
-          parse_mode: 'HTML'
+          text: text,
+          parse_mode: 'HTML',
+          reply_markup: reply_markup
         })
       });
     } catch (e) {
@@ -157,7 +185,7 @@ const App: React.FC = () => {
     
     saveOrder(newOrder);
     setOrders(prev => [newOrder, ...prev]);
-    sendTelegramNotification(newOrder); // Sending notification to TG
+    sendTelegramNotification(newOrder);
     
     setCartItems([]);
     setIsCartOpen(false);
@@ -167,7 +195,7 @@ const App: React.FC = () => {
   };
 
   const onUpdateOrderStatus = (orderId: string, status: OrderStatus) => {
-    const updatedOrders = orders.map(o => {
+    const updatedOrders = getStoredOrders().map(o => {
         if (o.id === orderId) {
             const updated = { ...o, status };
             if (status === 'preparing' && !o.preparingStartTime) {
@@ -183,9 +211,7 @@ const App: React.FC = () => {
 
   const handleCancelOrder = (orderId: string) => {
     if (confirm('Скасувати замовлення?')) {
-      const updatedOrders = orders.map(o => o.id === orderId ? { ...o, status: 'cancelled' as OrderStatus } : o);
-      setOrders(updatedOrders);
-      saveOrders(updatedOrders);
+      onUpdateOrderStatus(orderId, 'cancelled');
       setNotification("Замовлення скасовано");
       setTimeout(() => setNotification(null), 2000);
     }
@@ -236,10 +262,8 @@ const App: React.FC = () => {
         onOpenCart={() => setIsCartOpen(true)}
       />
 
-      {/* Landing Page Content Only for Home View */}
       {currentView === 'home' && (
         <div className="animate-in fade-in duration-700">
-          {/* Hero Section */}
           <section className="relative h-[80vh] min-h-[500px] flex items-center justify-center overflow-hidden">
              <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-[0.4] scale-105 animate-pulse-slow" alt="P2Pizza Hero" />
              <div className="container mx-auto px-4 z-10 text-center text-white">
@@ -262,86 +286,12 @@ const App: React.FC = () => {
                    >
                      Замовити зараз
                    </button>
-                   <button 
-                    onClick={() => setCurrentView('promotions')}
-                    className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border-2 border-white/30 px-10 py-5 rounded-full font-black uppercase tracking-widest transition-all active:scale-95"
-                   >
-                     Наші Акції
-                   </button>
                 </div>
              </div>
-          </section>
-
-          {/* Features Section */}
-          <section className="py-24 bg-white">
-            <div className="container mx-auto px-4">
-               <div className="text-center mb-16">
-                  <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-4">Чому обирають <span className="text-orange-500">P2PIZZA</span>?</h2>
-                  <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Ми робимо більше, ніж просто їжу</p>
-               </div>
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                  {[
-                    { icon: Zap, title: "Швидкість", desc: "Приготування за 8 хвилин. Доставка по місту до 40 хвилин." },
-                    { icon: ShieldCheck, title: "Якість", desc: "Тільки свіжі інгредієнти від перевірених фермерів." },
-                    { icon: Smile, title: "Смак", desc: "Авторські рецепти, які ви не знайдете в інших місцях." }
-                  ].map((f, i) => (
-                    <div key={i} className="flex flex-col items-center text-center p-8 rounded-[3rem] bg-[#fffaf5] border border-orange-50 hover:shadow-xl transition-all">
-                       <div className="w-16 h-16 bg-orange-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg">
-                          <f.icon size={32} />
-                       </div>
-                       <h3 className="text-2xl font-black mb-4 uppercase">{f.title}</h3>
-                       <p className="text-gray-500 font-medium leading-relaxed">{f.desc}</p>
-                    </div>
-                  ))}
-               </div>
-            </div>
-          </section>
-
-          {/* How it Works Section */}
-          <section className="py-24 bg-[#fffaf5]">
-            <div className="container mx-auto px-4">
-               <div className="flex flex-col md:flex-row items-center gap-16">
-                  <div className="md:w-1/2">
-                     <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-8 leading-none">Від вашого замовлення до <span className="text-orange-500">першого шматочка</span></h2>
-                     <div className="space-y-8">
-                        {[
-                          { step: "01", title: "Оберіть улюблену піцу", desc: "Перегляньте наше меню та додайте страви до кошика." },
-                          { step: "02", title: "Ми починаємо магію", desc: "Наші піцайоло готують ваше замовлення зі свіжого тіста." },
-                          { step: "03", title: "Гаряча доставка", desc: "Кур'єр привозить замовлення ще гарячим прямо до дверей." }
-                        ].map((s, i) => (
-                          <div key={i} className="flex gap-6 items-start">
-                             <span className="text-4xl font-black text-orange-200">{s.step}</span>
-                             <div>
-                                <h4 className="text-xl font-black uppercase mb-1">{s.title}</h4>
-                                <p className="text-gray-500 font-medium">{s.desc}</p>
-                             </div>
-                          </div>
-                        ))}
-                     </div>
-                  </div>
-                  <div className="md:w-1/2 relative">
-                     <div className="rounded-[4rem] overflow-hidden shadow-2xl rotate-3">
-                        <img src="https://images.unsplash.com/photo-1590947132387-155cc02f3212?auto=format&fit=crop&q=80&w=800" alt="Cooking" className="w-full h-full object-cover" />
-                     </div>
-                     <div className="absolute -bottom-10 -left-10 bg-white p-8 rounded-[2rem] shadow-xl border border-orange-50 hidden lg:block animate-bounce-slow">
-                        <div className="flex items-center gap-4">
-                           <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white">
-                              <Utensils size={24} />
-                           </div>
-                           <div>
-                              <p className="font-black text-sm uppercase">1000+ замовлень</p>
-                              <p className="text-[10px] text-gray-400 font-bold">Сьогодні у вашому місті</p>
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-            </div>
           </section>
         </div>
       )}
 
-      {/* Main Menu Section (Shared for all views except Home-landing) */}
       <main id="menu-start" className="container mx-auto px-4 py-16 min-h-[60vh]">
         {activePreparingOrder && (
           <div className="max-w-xl mx-auto mb-16">
@@ -381,11 +331,7 @@ const App: React.FC = () => {
                         <span className="text-[10px] font-black bg-black text-white px-3 py-1 rounded-lg uppercase tracking-widest">{order.id}</span>
                         <span className="text-gray-400 text-[10px] font-bold uppercase">{order.date}</span>
                       </div>
-                      <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${order.paymentMethod === 'card_on_receipt' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-700'}`}>
-                        {order.paymentMethod === 'card_on_receipt' ? 'Картою' : 'Готівка'}
-                      </div>
                     </div>
-
                     <div className="flex flex-wrap gap-2 mb-6">
                       {order.items.map(item => (
                         <span key={item.id} className="bg-[#fffaf5] border border-orange-100 text-orange-600 px-3 py-2 rounded-xl text-xs font-black uppercase">
@@ -393,27 +339,15 @@ const App: React.FC = () => {
                         </span>
                       ))}
                     </div>
-
                     <div className="flex flex-wrap items-center gap-6">
                       <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500"><Clock size={16} className="text-orange-500" /> {order.type === 'delivery' ? 'Доставка' : 'Самовивіз'}</div>
                       <div className={`flex items-center gap-2 text-[10px] font-black uppercase ${order.status === 'completed' || order.status === 'delivered' ? 'text-green-600' : order.status === 'cancelled' ? 'text-red-500' : 'text-orange-600'}`}>
-                        {order.status === 'completed' || order.status === 'delivered' ? <CheckCircle2 size={16} /> : order.status === 'cancelled' ? <XCircle size={16} /> : <div className="w-4 h-4 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />}
                         {order.status === 'pending' ? 'Очікує' : order.status === 'preparing' ? 'Готується' : order.status === 'ready' ? 'Готово' : order.status === 'delivered' ? 'Доставлено' : order.status === 'cancelled' ? 'Скасовано' : 'Виконано'}
                       </div>
                     </div>
                   </div>
                   <div className="text-center md:text-right min-w-[160px] border-t md:border-t-0 md:border-l pt-6 md:pt-0 md:pl-8 flex flex-col items-center md:items-end">
-                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">До сплати</p>
                     <p className="text-3xl font-black text-black mb-6">{order.total} <span className="text-sm font-bold text-orange-500">грн</span></p>
-                    
-                    {order.status === 'pending' && (
-                      <button 
-                        onClick={() => handleCancelOrder(order.id)}
-                        className="flex items-center gap-2 bg-red-50 text-red-600 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase hover:bg-red-600 hover:text-white transition-all border border-red-100"
-                      >
-                        <XCircle size={14} /> Скасувати
-                      </button>
-                    )}
                   </div>
                 </div>
               ))
@@ -428,10 +362,8 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
       <Footer />
 
-      {/* Mobile Bottom Navigation */}
       {showMobileNav && (
         <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/90 backdrop-blur-xl border-t border-orange-100 flex items-center justify-around px-2 py-4 md:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)] pb-safe">
           {navItems.map((item) => {
@@ -439,83 +371,24 @@ const App: React.FC = () => {
             const isActive = currentView === item.id;
             if (item.requireAuth && !user) return null;
             return (
-              <button
-                key={item.id}
-                onClick={() => setCurrentView(item.id)}
-                className={`flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-orange-500 scale-110' : 'text-gray-400'}`}
-              >
+              <button key={item.id} onClick={() => setCurrentView(item.id)} className={`flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-orange-500 scale-110' : 'text-gray-400'}`}>
                 <Icon size={24} className={isActive ? 'fill-orange-50' : ''} />
                 <span className="text-[9px] font-black uppercase tracking-tighter">{item.label}</span>
               </button>
             );
           })}
-          <button 
-            onClick={() => setIsCartOpen(true)}
-            className={`flex flex-col items-center gap-1 transition-all duration-300 relative ${cartCount > 0 ? 'text-black' : 'text-gray-400'}`}
-          >
+          <button onClick={() => setIsCartOpen(true)} className={`flex flex-col items-center gap-1 transition-all duration-300 relative ${cartCount > 0 ? 'text-black' : 'text-gray-400'}`}>
             <ShoppingCart size={24} />
-            <span className="text-[9px] font-black uppercase tracking-tighter">Кошик</span>
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -right-2 bg-orange-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                {cartCount}
-              </span>
-            )}
+            {cartCount > 0 && <span className="absolute -top-1 -right-2 bg-orange-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">{cartCount}</span>}
           </button>
         </nav>
       )}
 
-      {/* Flying Animation */}
       {flyingPizzas.map(p => (
-        <div 
-          key={p.id}
-          className="fixed z-[200] w-24 h-24 rounded-full shadow-2xl pointer-events-none"
-          style={{
-            left: p.startX,
-            top: p.startY,
-            animation: 'flyToCart 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
-          }}
-        >
+        <div key={p.id} className="fixed z-[200] w-24 h-24 rounded-full shadow-2xl pointer-events-none" style={{ left: p.startX, top: p.startY, animation: 'flyToCart 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards' }}>
           <img src={p.image} className="w-full h-full object-cover rounded-full border-4 border-white shadow-xl" alt="Flying Pizza" />
         </div>
       ))}
-
-      <style>{`
-        @keyframes flyToCart {
-          0% { transform: scale(1.2) rotate(0deg); opacity: 1; }
-          40% { transform: scale(0.8) rotate(180deg); opacity: 1; }
-          100% { 
-            left: calc(100vw - 150px); 
-            top: 20px; 
-            transform: scale(0.1) rotate(720deg); 
-            opacity: 0; 
-          }
-        }
-        @media (max-width: 768px) {
-          @keyframes flyToCart {
-            0% { transform: scale(1.2) rotate(0deg); opacity: 1; }
-            100% { 
-              left: calc(100vw - 100px); 
-              top: calc(100vh - 80px); 
-              transform: scale(0.1) rotate(720deg); 
-              opacity: 0; 
-            }
-          }
-        }
-        @keyframes bounce-slow {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        .animate-bounce-slow {
-          animation: bounce-slow 4s infinite ease-in-out;
-        }
-        @keyframes pulse-slow {
-          0%, 100% { transform: scale(1.05); }
-          50% { transform: scale(1); }
-        }
-        .animate-pulse-slow {
-          animation: pulse-slow 20s infinite ease-in-out;
-        }
-      `}</style>
 
       <Cart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} items={cartItems} onUpdateQuantity={handleUpdateQuantity} onRemove={handleRemoveFromCart} onPlaceOrder={handlePlaceOrder} />
       <Auth isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} currentUser={user} onLogin={(u) => { setUser(u); saveUser(u); }} onLogout={() => { setUser(null); saveUser(null); }} />
