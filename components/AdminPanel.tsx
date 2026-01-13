@@ -1,16 +1,15 @@
 
 import React, { useState, useRef } from 'react';
-import { Pizza, Order, OrderStatus, SiteSpecial } from '../types';
+import { Pizza, Order, OrderStatus, SiteSpecial } from '../types.ts';
 import { 
-  Plus, Edit2, Trash2, X, Check, Key, Shield, Image as ImageIcon, 
-  Upload, List, ShoppingBag, Clock, CheckCircle, AlertCircle, 
-  MapPin, Sparkles, MessageSquare, Phone, Settings, Send, ExternalLink 
+  Plus, Edit2, Trash2, X, Check, Key, Database, Send, Settings, 
+  Palette, Camera, Upload, Phone, ShoppingBag, List, Image as ImageIcon
 } from 'lucide-react';
 import { 
-  saveAdminPassword, saveLogo, getStoredLogo, getStoredSpecial, 
-  saveSpecial, getStoredShopPhone, saveShopPhone, getTelegramConfig, 
-  saveTelegramConfig 
-} from '../store';
+  getStoredSpecial, saveSpecial, getStoredShopPhone, 
+  saveShopPhone, getTelegramConfig, saveTelegramConfig, getSupabaseConfig, 
+  saveSupabaseConfig, getStoredLogo, saveLogo, getSupabaseHeaders
+} from '../store.ts';
 
 interface AdminPanelProps {
   pizzas: Pizza[];
@@ -24,190 +23,140 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
   const [activeTab, setActiveTab] = useState<'menu' | 'orders' | 'settings'>('menu');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Pizza>>({});
-  const [isChangingPass, setIsChangingPass] = useState(false);
-  const [newPass, setNewPass] = useState('');
-  const [shopPhone, setShopPhone] = useState(getStoredShopPhone());
   
-  const tgConfig = getTelegramConfig();
-  const [tgToken, setTgToken] = useState(tgConfig.token);
-  const [tgChatId, setTgChatId] = useState(tgConfig.chatId);
-  const [isTestingTg, setIsTestingTg] = useState(false);
-
-  const [statusMessage, setStatusMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  const [shopPhone, setShopPhone] = useState(getStoredShopPhone());
+  const [siteLogo, setSiteLogo] = useState(getStoredLogo());
+  
+  const tgCfg = getTelegramConfig();
+  const [tgToken, setTgToken] = useState(tgCfg.token);
+  const [tgChatId, setTgChatId] = useState(tgCfg.chatId);
+  
+  const sbCfg = getSupabaseConfig();
+  const [sbUrl, setSbUrl] = useState(sbCfg.url);
+  const [sbKey, setSbKey] = useState(sbCfg.key);
+  
   const [siteSpecial, setSiteSpecial] = useState<SiteSpecial>(getStoredSpecial());
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const pizzaImageInputRef = useRef<HTMLInputElement>(null);
-  const specialImageInputRef = useRef<HTMLInputElement>(null);
+  const logoFileRef = useRef<HTMLInputElement>(null);
+  const pizzaFileRef = useRef<HTMLInputElement>(null);
 
-  const handleDelete = (id: string) => {
-    if (confirm('Ви впевнені, що хочете видалити цю піцу?')) {
-      onUpdatePizzas(pizzas.filter(p => p.id !== id));
-    }
-  };
-
-  const handleEdit = (pizza: Pizza) => {
-    setEditingId(pizza.id);
-    setEditForm(pizza);
-  };
-
-  const handleSave = () => {
-    if (editingId === 'new') {
-      const newPizza: Pizza = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: editForm.name || '',
-        description: editForm.description || '',
-        price: editForm.price || 0,
-        image: editForm.image || 'https://picsum.photos/400/400',
-        category: editForm.category || 'pizza',
-        isNew: editForm.isNew,
-        isPromo: editForm.isPromo,
-      };
-      onUpdatePizzas([newPizza, ...pizzas]);
-    } else {
-      onUpdatePizzas(pizzas.map(p => p.id === editingId ? { ...p, ...editForm } as Pizza : p));
-    }
-    setEditingId(null);
-  };
-
-  const handleSaveSiteSettings = () => {
+  const handleSaveSettings = () => {
     saveSpecial(siteSpecial);
     saveShopPhone(shopPhone);
+    saveLogo(siteLogo);
     saveTelegramConfig(tgToken, tgChatId);
-    setStatusMessage({ text: 'Налаштування оновлено!', type: 'success' });
-    setTimeout(() => setStatusMessage(null), 2000);
+    saveSupabaseConfig(sbUrl, sbKey);
+    setStatusMessage('Налаштування збережено!');
+    setTimeout(() => setStatusMessage(null), 3000);
+    window.dispatchEvent(new Event('storage'));
   };
 
-  const testTelegram = async () => {
-    if (!tgToken || !tgChatId) {
-      setStatusMessage({ text: 'Спочатку введіть Token та Chat ID', type: 'error' });
-      return;
-    }
-    setIsTestingTg(true);
-    try {
-      const message = `🔔 <b>ТЕСТОВЕ ПОВІДОМЛЕННЯ</b>\n\nВаш сайт P2PIZZA успішно підключений до Telegram! Тепер сюди будуть приходити нові замовлення.`;
-      const url = `https://api.telegram.org/bot${tgToken}/sendMessage`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: tgChatId, text: message, parse_mode: 'HTML' })
-      });
-      if (response.ok) {
-        setStatusMessage({ text: 'Тестове повідомлення надіслано!', type: 'success' });
-      } else {
-        const errData = await response.json();
-        throw new Error(errData.description || 'Помилка Telegram API');
-      }
-    } catch (e: any) {
-      setStatusMessage({ text: `Помилка: ${e.message}`, type: 'error' });
-    } finally {
-      setIsTestingTg(false);
-      setTimeout(() => setStatusMessage(null), 4000);
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'logo' | 'pizza') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        if (target === 'logo') setSiteLogo(base64);
+        else setEditForm(prev => ({ ...prev, image: base64 }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const handlePasswordChange = () => {
-    if (newPass.length < 4) {
-      setStatusMessage({ text: 'Пароль занадто короткий', type: 'error' });
-      return;
-    }
-    saveAdminPassword(newPass);
-    setStatusMessage({ text: 'Пароль змінено!', type: 'success' });
-    setNewPass('');
-    setTimeout(() => {
-      setStatusMessage(null);
-      setIsChangingPass(false);
-    }, 2000);
-  };
-
-  const getStatusColor = (status: OrderStatus) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-700';
-      case 'preparing': return 'bg-orange-100 text-orange-700';
-      case 'ready': return 'bg-blue-100 text-blue-700';
-      case 'delivered': return 'bg-purple-100 text-purple-700';
-      case 'completed': return 'bg-green-100 text-green-700';
-      case 'cancelled': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
+  const handleDelete = (id: string) => {
+    if (confirm('Видалити цю позицію з меню назавжди?')) {
+      const newPizzas = pizzas.filter(p => p.id !== id);
+      onUpdatePizzas(newPizzas);
+      setStatusMessage('Видалено успішно');
+      setTimeout(() => setStatusMessage(null), 2000);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-white overflow-y-auto text-black pb-24">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-4xl font-black text-black uppercase">Адмін-панель <span className="text-orange-500">P2PIZZA</span></h1>
-            <div className="flex flex-wrap gap-4 mt-4">
-              <button onClick={() => setActiveTab('menu')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black uppercase text-xs transition-all ${activeTab === 'menu' ? 'bg-orange-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}><List size={18} /> Меню</button>
-              <button onClick={() => setActiveTab('orders')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black uppercase text-xs transition-all ${activeTab === 'orders' ? 'bg-orange-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}><ShoppingBag size={18} /> Замовлення</button>
-              <button onClick={() => setActiveTab('settings')} className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black uppercase text-xs transition-all ${activeTab === 'settings' ? 'bg-orange-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}><Settings size={18} /> Налаштування</button>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-4 items-center">
-            <button onClick={() => setIsChangingPass(!isChangingPass)} className="bg-gray-100 text-black px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors"><Key size={18} /> Пароль</button>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={24} /></button>
-          </div>
+    <div className="fixed inset-0 z-[150] bg-white overflow-y-auto text-black">
+      <div className="container mx-auto px-4 py-8 md:p-12">
+        <div className="flex justify-between items-center mb-10">
+          <h1 className="text-3xl font-black uppercase tracking-tighter">Адмін-панель <span className="text-orange-500">P2P</span></h1>
+          <button onClick={onClose} className="p-3 bg-gray-100 rounded-full hover:bg-orange-100 transition-colors shadow-sm"><X size={24}/></button>
         </div>
 
-        {statusMessage && (
-          <div className={`mb-6 p-4 rounded-xl font-bold text-sm uppercase flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${statusMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-            {statusMessage.type === 'success' ? <Check size={18} /> : <AlertCircle size={18} />}
-            {statusMessage.text}
+        <div className="flex gap-2 md:gap-4 mb-12 overflow-x-auto pb-2 scrollbar-hide">
+          <button onClick={()=>setActiveTab('menu')} className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab==='menu'?'bg-black text-white shadow-xl':'bg-gray-100 text-gray-400'}`}><List size={18}/> Меню</button>
+          <button onClick={()=>setActiveTab('orders')} className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab==='orders'?'bg-black text-white shadow-xl':'bg-gray-100 text-gray-400'}`}><ShoppingBag size={18}/> Замовлення ({orders.length})</button>
+          <button onClick={()=>setActiveTab('settings')} className={`flex items-center gap-2 px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${activeTab==='settings'?'bg-orange-500 text-white shadow-xl':'bg-gray-100 text-gray-400'}`}><Settings size={18}/> Налаштування</button>
+        </div>
+
+        {activeTab === 'settings' && (
+          <div className="max-w-4xl space-y-8 pb-32">
+            <div className="bg-white p-8 border-2 border-orange-400 rounded-[3rem] shadow-xl">
+               <div className="flex items-center gap-4 mb-8">
+                  <div className="w-14 h-14 bg-black rounded-2xl flex items-center justify-center text-white"><Palette size={28} /></div>
+                  <h2 className="text-2xl font-black uppercase tracking-tight">Брендинг та Контакти</h2>
+               </div>
+               <div className="grid md:grid-cols-2 gap-10">
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Логотип (завантажити фото)</label>
+                    <div className="flex items-center gap-6">
+                      <div className="w-24 h-24 rounded-3xl overflow-hidden border-2 border-gray-100 shadow-inner">
+                        <img src={siteLogo} className="w-full h-full object-cover" alt="Logo" />
+                      </div>
+                      <input type="file" ref={logoFileRef} className="hidden" accept="image/*" onChange={(e)=>handleFileUpload(e, 'logo')} />
+                      <button onClick={() => logoFileRef.current?.click()} className="bg-black text-white px-5 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest flex items-center gap-2 hover:bg-orange-500 transition-all shadow-md"><Upload size={14}/> Вибрати файл</button>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Телефон закладу</label>
+                    <div className="relative">
+                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500" size={18} />
+                       <input className="w-full pl-12 p-4 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:border-orange-500 outline-none font-black text-lg" value={shopPhone} onChange={e=>setShopPhone(e.target.value)} />
+                    </div>
+                  </div>
+               </div>
+            </div>
+
+            <div className="bg-white p-8 border-2 border-blue-500 rounded-[3rem] shadow-xl">
+               <div className="flex items-center gap-4 mb-8">
+                  <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center text-white shadow-lg"><Send size={28} /></div>
+                  <h2 className="text-2xl font-black uppercase tracking-tight">Telegram Сповіщення</h2>
+               </div>
+               <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Bot Token</label>
+                    <input className="w-full p-4 border-2 border-gray-50 rounded-2xl focus:border-blue-500 outline-none text-xs font-bold" value={tgToken} onChange={e=>setTgToken(e.target.value)} placeholder="Токен вашого бота" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Chat ID</label>
+                    <input className="w-full p-4 border-2 border-gray-50 rounded-2xl focus:border-blue-500 outline-none text-xs font-bold" value={tgChatId} onChange={e=>setTgChatId(e.target.value)} placeholder="ID чату або групи" />
+                  </div>
+               </div>
+            </div>
+
+            <button onClick={handleSaveSettings} className="w-full bg-orange-500 text-white py-6 rounded-[2.5rem] font-black uppercase tracking-widest shadow-2xl hover:bg-black transition-all transform active:scale-95">Зберегти всі налаштування</button>
           </div>
         )}
 
-        {activeTab === 'menu' ? (
-          <div className="grid gap-6">
-            <button onClick={() => { setEditingId('new'); setEditForm({ name: '', description: '', price: 0, category: 'pizza', image: 'https://picsum.photos/400/400' }); }} className="bg-green-500 text-white px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-green-600 transition-all shadow-lg shadow-green-100">
-               <Plus size={20} /> Додати нову позицію
-            </button>
-            
-            {editingId && (
-              <div className="bg-white p-8 rounded-3xl border-2 border-orange-200 animate-in fade-in zoom-in duration-200 shadow-xl">
-                <h2 className="text-2xl font-black mb-6 text-black uppercase tracking-tight">{editingId === 'new' ? 'Нова піца' : 'Редагування'}</h2>
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="md:col-span-1">
-                    <div className="aspect-square bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 overflow-hidden relative group">
-                      <img src={editForm.image} alt="Pizza" className="w-full h-full object-cover" />
-                      <button onClick={() => pizzaImageInputRef.current?.click()} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-2 font-bold"><Upload size={32} />Змінити</button>
-                      <input type="file" ref={pizzaImageInputRef} className="hidden" accept="image/*" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => setEditForm({ ...editForm, image: reader.result as string });
-                          reader.readAsDataURL(file);
-                        }
-                      }} />
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input placeholder="Назва" className="px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-orange-500 outline-none text-black font-black" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
-                    <input type="number" placeholder="Ціна" className="px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-orange-500 outline-none text-black font-black" value={editForm.price} onChange={e => setEditForm({...editForm, price: Number(e.target.value)})} />
-                    <textarea placeholder="Опис" rows={3} className="px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-orange-500 outline-none sm:col-span-2 text-black font-medium" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} />
-                  </div>
-                </div>
-                <div className="mt-8 flex gap-4 border-t pt-6">
-                  <button onClick={handleSave} className="bg-orange-500 text-white px-10 py-3 rounded-xl font-black uppercase tracking-widest text-xs flex items-center gap-2"><Check size={18} /> Зберегти</button>
-                  <button onClick={() => setEditingId(null)} className="bg-gray-100 text-black px-10 py-3 rounded-xl font-black uppercase text-xs">Скасувати</button>
-                </div>
-              </div>
-            )}
-            
-            <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-black text-white uppercase text-[10px] font-black tracking-widest">
-                  <tr><th className="p-5">Фото</th><th className="p-5">Назва</th><th className="p-5">Ціна</th><th className="p-5 text-right">Дії</th></tr>
+        {activeTab === 'menu' && (
+          <div className="animate-in fade-in duration-500 pb-32">
+            <button onClick={()=>{setEditingId('new'); setEditForm({name:'', price:0, category:'pizza', image:'', description: ''});}} className="bg-green-500 text-white px-10 py-5 rounded-[2rem] font-black uppercase text-xs mb-8 shadow-xl hover:bg-green-600 transition-colors">+ Додати нову страву</button>
+            <div className="bg-white border rounded-[2.5rem] overflow-hidden shadow-sm overflow-x-auto">
+              <table className="w-full text-left min-w-[600px]">
+                <thead className="bg-black text-white text-[10px] uppercase font-black tracking-widest">
+                  <tr><th className="p-6">Страва</th><th className="p-6">Категорія</th><th className="p-6">Ціна</th><th className="p-6 text-right">Дії</th></tr>
                 </thead>
                 <tbody>
-                  {pizzas.map(pizza => (
-                    <tr key={pizza.id} className="border-b last:border-0 hover:bg-orange-50/30 transition-colors">
-                      <td className="p-4"><img src={pizza.image} className="w-16 h-16 object-cover rounded-xl" /></td>
-                      <td className="p-4 font-black text-black">{pizza.name}</td>
-                      <td className="p-4 font-black text-orange-600">{pizza.price} грн</td>
-                      <td className="p-4 text-right flex gap-2 justify-end">
-                        <button onClick={() => handleEdit(pizza)} className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"><Edit2 size={16} /></button>
-                        <button onClick={() => handleDelete(pizza.id)} className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"><Trash2 size={16} /></button>
+                  {pizzas.map(p => (
+                    <tr key={p.id} className="border-b hover:bg-orange-50/50 transition-colors">
+                      <td className="p-6 flex items-center gap-4">
+                        <img src={p.image || 'https://i.ibb.co/3ykCjFz/p2p-logo.png'} className="w-14 h-14 object-cover rounded-2xl border" alt={p.name} />
+                        <span className="font-bold text-sm">{p.name}</span>
+                      </td>
+                      <td className="p-6"><span className="px-3 py-1 bg-gray-100 rounded-full text-[9px] font-black uppercase text-gray-500">{p.category}</span></td>
+                      <td className="p-6 font-black text-sm">{p.price} грн</td>
+                      <td className="p-6 text-right flex gap-3 justify-end">
+                        <button onClick={()=>{setEditingId(p.id); setEditForm(p);}} className="p-3 bg-blue-500 text-white rounded-xl shadow-md hover:bg-blue-600 transition-colors"><Edit2 size={18}/></button>
+                        <button onClick={()=>handleDelete(p.id)} className="p-3 bg-red-500 text-white rounded-xl shadow-md hover:bg-red-600 transition-colors"><Trash2 size={18}/></button>
                       </td>
                     </tr>
                   ))}
@@ -215,153 +164,98 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
               </table>
             </div>
           </div>
-        ) : activeTab === 'settings' ? (
-          <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             
-             {/* Telegram Card */}
-             <div className="bg-white p-8 rounded-[3rem] border-2 border-[#0088cc]/20 shadow-xl overflow-hidden relative">
-                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                  <Send size={120} className="text-[#0088cc]" />
-                </div>
-                
-                <div className="flex items-center justify-between mb-8 relative z-10">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-[#0088cc] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-[#0088cc]/20">
-                      <Send size={28} />
+        )}
+
+        {activeTab === 'orders' && (
+          <div className="space-y-6 pb-32 animate-in fade-in duration-500">
+            {orders.length === 0 ? <p className="text-center py-24 text-gray-400 font-black uppercase text-xs tracking-widest">Немає активних замовлень</p> : 
+              orders.map(o => (
+                <div key={o.id} className="bg-white p-6 md:p-8 rounded-[3rem] border-2 border-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="space-y-3 flex-grow">
+                    <div className="flex items-center gap-3">
+                      <span className="font-black text-xs uppercase tracking-tighter bg-black text-white px-3 py-1 rounded-xl shadow-sm">{o.id}</span>
+                      <span className="text-[10px] text-gray-400 font-bold">{o.date}</span>
                     </div>
-                    <div>
-                      <h2 className="text-2xl font-black uppercase tracking-tight text-black leading-none">Telegram Сповіщення</h2>
-                      <p className="text-[10px] font-black text-[#0088cc] uppercase tracking-widest mt-2">Отримуйте замовлення миттєво</p>
+                    <p className="text-sm font-bold text-gray-800 leading-tight bg-orange-50/50 p-3 rounded-2xl border border-orange-50/50">{o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
+                    <div className="flex flex-wrap gap-4 text-[10px] font-black uppercase text-gray-500">
+                       <span className="flex items-center gap-1 text-orange-600 bg-orange-50 px-3 py-1 rounded-lg"><Phone size={12}/> {o.phone}</span>
+                       {o.address && <span className="bg-gray-50 px-3 py-1 rounded-lg">Адреса: {o.address}, {o.houseNumber}</span>}
+                       {o.notes && <span className="bg-yellow-50 px-3 py-1 rounded-lg text-orange-700 italic border border-yellow-100">Коментар: {o.notes}</span>}
+                       <span className={`px-3 py-1 rounded-lg border ${o.paymentMethod === 'cash' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>Оплата: {o.paymentMethod === 'cash' ? 'Готівка' : 'Карта'}</span>
                     </div>
                   </div>
-                  <button 
-                    onClick={testTelegram}
-                    disabled={isTestingTg}
-                    className="bg-[#0088cc] text-white px-6 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-[#006699] transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[#0088cc]/10"
-                  >
-                    {isTestingTg ? <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" /> : <Send size={16} />}
-                    Перевірити бота
-                  </button>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-8 mb-8 relative z-10">
-                  <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Bot API Token</label>
-                    <input 
-                      type="password"
-                      className="w-full px-5 py-4 rounded-2xl border-2 border-gray-100 focus:border-[#0088cc] outline-none text-black font-medium transition-all bg-gray-50/50"
-                      placeholder="123456:ABC-DEF..."
-                      value={tgToken}
-                      onChange={e => setTgToken(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Мій Chat ID</label>
-                    <input 
-                      className="w-full px-5 py-4 rounded-2xl border-2 border-gray-100 focus:border-[#0088cc] outline-none text-black font-black transition-all bg-gray-50/50"
-                      placeholder="987654321"
-                      value={tgChatId}
-                      onChange={e => setTgChatId(e.target.value)}
-                    />
+                  <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0">
+                    <p className="font-black text-3xl text-orange-600">{o.total} грн</p>
+                    <select value={o.status} onChange={e=>onUpdateOrderStatus(o.id, e.target.value as OrderStatus)} className="flex-grow md:flex-grow-0 p-4 text-[10px] font-black uppercase rounded-2xl border-2 outline-none cursor-pointer bg-gray-50 hover:bg-white transition-colors">
+                      <option value="pending">Новий</option>
+                      <option value="preparing">Готується</option>
+                      <option value="ready">Готово</option>
+                      <option value="completed">Виконано</option>
+                      <option value="cancelled">Скасовано</option>
+                    </select>
                   </div>
                 </div>
-
-                <div className="bg-[#f0f9ff] p-6 rounded-[2rem] border border-[#0088cc]/10 space-y-4 relative z-10">
-                   <h4 className="flex items-center gap-2 text-[#0088cc] font-black uppercase text-xs">
-                     <AlertCircle size={16} /> Як це налаштувати?
-                   </h4>
-                   <div className="grid sm:grid-cols-3 gap-4">
-                      <a href="https://t.me/BotFather" target="_blank" className="bg-white p-4 rounded-2xl border border-[#0088cc]/10 hover:border-[#0088cc] transition-all group">
-                         <p className="text-[10px] font-black uppercase text-gray-400 mb-2">Крок 1</p>
-                         <p className="text-[11px] font-bold text-black leading-tight">Напишіть <span className="text-[#0088cc]">@BotFather</span> у Telegram та створіть нового бота (/newbot).</p>
-                         <ExternalLink size={14} className="mt-2 text-gray-300 group-hover:text-[#0088cc]" />
-                      </a>
-                      <a href="https://t.me/userinfobot" target="_blank" className="bg-white p-4 rounded-2xl border border-[#0088cc]/10 hover:border-[#0088cc] transition-all group">
-                         <p className="text-[10px] font-black uppercase text-gray-400 mb-2">Крок 2</p>
-                         <p className="text-[11px] font-bold text-black leading-tight">Напишіть <span className="text-[#0088cc]">@userinfobot</span> щоб дізнатися свій унікальний Chat ID.</p>
-                         <ExternalLink size={14} className="mt-2 text-gray-300 group-hover:text-[#0088cc]" />
-                      </a>
-                      <div className="bg-white p-4 rounded-2xl border border-[#0088cc]/10">
-                         <p className="text-[10px] font-black uppercase text-gray-400 mb-2">Крок 3</p>
-                         <p className="text-[11px] font-bold text-black leading-tight">Вставте дані вище та натисніть кнопку "Зберегти" внизу сторінки.</p>
-                      </div>
-                   </div>
-                </div>
-             </div>
-
-             {/* Phone Card */}
-             <div className="bg-white p-8 rounded-[3rem] border-2 border-orange-100 shadow-xl">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-100">
-                    <Phone size={28} />
-                  </div>
-                  <h2 className="text-2xl font-black uppercase tracking-tight text-black">Контакти закладу</h2>
-                </div>
-                <div className="space-y-2 max-w-sm">
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Телефон для клієнтів</label>
-                  <input 
-                    className="w-full px-5 py-4 rounded-2xl border-2 border-gray-100 focus:border-orange-500 outline-none text-black font-black bg-gray-50/50"
-                    placeholder="+380..."
-                    value={shopPhone}
-                    onChange={e => setShopPhone(e.target.value)}
-                  />
-                </div>
-             </div>
-
-             <div className="flex justify-end pt-4">
-                <button onClick={handleSaveSiteSettings} className="bg-black text-white px-12 py-5 rounded-[2rem] font-black uppercase tracking-widest text-sm flex items-center gap-3 hover:bg-orange-500 transition-all shadow-2xl active:scale-95">
-                  <CheckCircle size={20} /> Зберегти всі налаштування
-                </button>
-             </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-3xl shadow-sm border overflow-hidden">
-             <div className="p-6 bg-gray-50 border-b flex items-center justify-between">
-                <h2 className="text-xl font-black uppercase tracking-tight">Керування замовленнями</h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-black text-white uppercase text-[10px] font-black tracking-widest">
-                    <tr><th className="p-5">ID / Дата</th><th className="p-5">Деталі</th><th className="p-5">Сума</th><th className="p-5 text-right">Статус</th></tr>
-                  </thead>
-                  <tbody>
-                    {orders.map(order => (
-                      <tr key={order.id} className="border-b last:border-0 hover:bg-orange-50/20 transition-colors">
-                        <td className="p-5">
-                            <div className="font-black text-xs uppercase">{order.id}</div>
-                            <div className="text-[9px] text-gray-400 font-bold">{order.date}</div>
-                        </td>
-                        <td className="p-5">
-                            <div className="flex items-center gap-1 font-bold text-[10px] uppercase">
-                                {order.type === 'delivery' ? 'Доставка' : 'Самовивіз'}
-                            </div>
-                            <div className="text-[10px] font-bold text-gray-500">
-                                {order.items.map(i => `${i.name} x${i.quantity}`).join(', ')}
-                            </div>
-                        </td>
-                        <td className="p-5 font-black text-black">{order.total} грн</td>
-                        <td className="p-5 text-right">
-                            <select 
-                                value={order.status}
-                                onChange={(e) => onUpdateOrderStatus(order.id, e.target.value as OrderStatus)}
-                                className={`px-3 py-2 rounded-full text-[9px] font-black uppercase outline-none cursor-pointer ${getStatusColor(order.status)}`}
-                            >
-                                <option value="pending">Новий</option>
-                                <option value="preparing">Готується</option>
-                                <option value="ready">Готово</option>
-                                <option value="delivered">Доставлено</option>
-                                <option value="completed">Виконано</option>
-                                <option value="cancelled">Скасовано</option>
-                            </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              ))
+            }
           </div>
         )}
       </div>
+
+      {statusMessage && (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 bg-black text-white px-10 py-4 rounded-full font-black text-xs uppercase tracking-widest z-[300] shadow-2xl animate-in slide-in-from-top">
+          {statusMessage}
+        </div>
+      )}
+
+      {editingId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white p-8 md:p-12 rounded-[3.5rem] w-full max-w-xl shadow-2xl animate-in zoom-in duration-300">
+            <h2 className="text-3xl font-black mb-8 uppercase tracking-tighter">{editingId === 'new' ? 'Створення страви' : 'Редагування'}</h2>
+            <div className="grid md:grid-cols-2 gap-6 mb-10">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Назва</label>
+                <input className="w-full p-4 border rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-500 outline-none font-bold" placeholder="Назва страви" value={editForm.name} onChange={e=>setEditForm({...editForm, name:e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Ціна (грн)</label>
+                <input type="number" className="w-full p-4 border rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-500 outline-none font-black" placeholder="Ціна" value={editForm.price} onChange={e=>setEditForm({...editForm, price:Number(e.target.value)})} />
+              </div>
+              
+              <div className="md:col-span-2 space-y-3">
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Фото страви</label>
+                <div className="flex gap-6 items-center bg-gray-50 p-4 rounded-3xl border-2 border-dashed border-gray-200">
+                  <div className="w-20 h-20 rounded-2xl bg-white overflow-hidden flex-shrink-0 border shadow-sm">
+                    {editForm.image ? <img src={editForm.image} className="w-full h-full object-cover" alt="Preview" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={32}/></div>}
+                  </div>
+                  <div className="flex-grow space-y-2">
+                    <input type="file" ref={pizzaFileRef} className="hidden" accept="image/*" onChange={(e)=>handleFileUpload(e, 'pizza')} />
+                    <button onClick={() => pizzaFileRef.current?.click()} className="w-full bg-black text-white p-3 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 hover:bg-orange-500 transition-all shadow-md"><Camera size={14}/> Вибрати фото з галереї</button>
+                    <input className="w-full p-2 border-b text-[10px] font-medium outline-none bg-transparent" placeholder="Або вставте пряме посилання" value={editForm.image} onChange={e=>setEditForm({...editForm, image:e.target.value})} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Опис / Інгредієнти</label>
+                <textarea className="w-full p-4 border rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-500 outline-none font-medium text-sm h-32 resize-none" placeholder="Опишіть страву..." value={editForm.description} onChange={e=>setEditForm({...editForm, description:e.target.value})} />
+              </div>
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => {
+                if(!editForm.name || !editForm.price) { alert('Назва та ціна обов’язкові!'); return; }
+                if (editingId === 'new') {
+                  onUpdatePizzas([{...editForm, id: 'p' + Date.now()} as Pizza, ...pizzas]);
+                } else {
+                  onUpdatePizzas(pizzas.map(p => p.id === editingId ? { ...p, ...editForm } as Pizza : p));
+                }
+                setEditingId(null);
+                setEditForm({});
+              }} className="flex-grow bg-orange-500 text-white py-5 rounded-[2rem] font-black uppercase text-xs shadow-xl active:scale-95 transition-all">Зберегти</button>
+              <button onClick={()=>{setEditingId(null); setEditForm({});}} className="px-10 py-5 bg-gray-100 rounded-[2rem] font-black uppercase text-xs active:scale-95 transition-all">Скасувати</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

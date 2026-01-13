@@ -1,5 +1,5 @@
 
-import { Pizza, CartItem, Order, User, SiteSpecial } from './types';
+import { Pizza, Order, User, SiteSpecial } from './types';
 import { INITIAL_PIZZAS } from './constants';
 
 const STORAGE_KEYS = {
@@ -10,12 +10,32 @@ const STORAGE_KEYS = {
   SITE_LOGO: 'p2pizza_site_logo',
   SITE_SPECIAL: 'p2pizza_site_special',
   SHOP_PHONE: 'p2pizza_shop_phone',
-  REGISTERED_USERS: 'p2pizza_registered_users',
   TG_TOKEN: 'p2pizza_tg_token',
   TG_CHAT_ID: 'p2pizza_tg_chat_id',
+  SUPABASE_URL: 'p2pizza_sb_url',
+  SUPABASE_KEY: 'p2pizza_sb_key',
+  REGISTERED_USERS: 'p2pizza_registered_users',
 };
 
-const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
+export const getSupabaseConfig = () => ({
+  url: localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || '',
+  key: localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || '',
+});
+
+export const saveSupabaseConfig = (url: string, key: string) => {
+  localStorage.setItem(STORAGE_KEYS.SUPABASE_URL, url);
+  localStorage.setItem(STORAGE_KEYS.SUPABASE_KEY, key);
+};
+
+export const getSupabaseHeaders = () => {
+  const { key } = getSupabaseConfig();
+  return {
+    'apikey': key,
+    'Authorization': `Bearer ${key}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+};
 
 export const getStoredPizzas = (): Pizza[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PIZZAS);
@@ -36,17 +56,6 @@ export const saveUser = (user: User | null) => {
   else localStorage.removeItem(STORAGE_KEYS.USER);
 };
 
-export const getRegisteredUsers = (): any[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.REGISTERED_USERS);
-  return data ? JSON.parse(data) : [];
-};
-
-export const registerNewUser = (user: any) => {
-  const users = getRegisteredUsers();
-  users.push(user);
-  localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(users));
-};
-
 export const getStoredOrders = (): Order[] => {
   const data = localStorage.getItem(STORAGE_KEYS.ORDERS);
   return data ? JSON.parse(data) : [];
@@ -59,30 +68,6 @@ export const saveOrders = (orders: Order[]) => {
 export const saveOrder = (order: Order) => {
   const orders = getStoredOrders();
   saveOrders([order, ...orders]);
-};
-
-export const getAdminPassword = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || 'admin123';
-};
-
-export const saveAdminPassword = (password: string) => {
-  localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, password);
-};
-
-export const getStoredLogo = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
-};
-
-export const saveLogo = (logoBase64: string) => {
-  localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logoBase64);
-};
-
-export const getStoredShopPhone = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';
-};
-
-export const saveShopPhone = (phone: string) => {
-  localStorage.setItem(STORAGE_KEYS.SHOP_PHONE, phone);
 };
 
 export const getStoredSpecial = (): SiteSpecial => {
@@ -107,4 +92,39 @@ export const getTelegramConfig = () => ({
 export const saveTelegramConfig = (token: string, chatId: string) => {
   localStorage.setItem(STORAGE_KEYS.TG_TOKEN, token);
   localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
+};
+
+export const getStoredShopPhone = (): string => {
+  return localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';
+};
+
+export const saveShopPhone = (phone: string) => {
+  localStorage.setItem(STORAGE_KEYS.SHOP_PHONE, phone);
+};
+
+export const getAdminPassword = (): string => {
+  return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || 'admin123';
+};
+
+export const saveAdminPassword = (password: string) => {
+  localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, password);
+};
+
+export const getStoredLogo = (): string => {
+  return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
+};
+
+export const saveLogo = (logo: string) => {
+  localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
+};
+
+export const getRegisteredUsers = (): any[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.REGISTERED_USERS);
+  return data ? JSON.parse(data) : [];
+};
+
+export const registerNewUser = (user: any) => {
+  const users = getRegisteredUsers();
+  users.push(user);
+  localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(users));
 };
