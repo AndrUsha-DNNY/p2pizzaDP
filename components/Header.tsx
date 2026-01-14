@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User as UserIcon, Heart, History, Star, Settings, Package, ShoppingCart, Phone } from 'lucide-react';
 import { User } from '../types';
-import { getStoredLogo, getStoredShopPhone } from '../store';
+import { getStoredLogo, getStoredShopPhone, DEFAULT_LOGO } from '../store';
 
 interface HeaderProps {
   user: User | null;
@@ -22,10 +22,8 @@ const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onNavigate, cartCount
       setPhone(getStoredShopPhone());
     };
     window.addEventListener('storage', handleStorageChange);
-    const interval = setInterval(handleStorageChange, 1000);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
     };
   }, []);
 
@@ -36,21 +34,21 @@ const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onNavigate, cartCount
           className="flex items-center gap-3 cursor-pointer group" 
           onClick={() => onNavigate('home')}
         >
-          <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center text-white font-bold text-xl overflow-hidden shadow-lg group-hover:scale-105 transition-transform border border-gray-100">
+          <div className="w-12 h-12 bg-orange-500 rounded-2xl flex items-center justify-center text-white font-bold text-xl overflow-hidden shadow-lg group-hover:scale-105 transition-transform border border-orange-200">
              <img 
                src={logo} 
-               alt="Logo" 
+               alt="P2Pizza Logo" 
                className="w-full h-full object-cover" 
                onError={(e) => {
-                 (e.target as HTMLImageElement).src = "https://i.ibb.co/3ykCjFz/p2p-logo.png";
+                 (e.target as HTMLImageElement).src = DEFAULT_LOGO;
                }} 
              />
           </div>
-          <span className="text-2xl font-black text-black tracking-tighter">P2PIZZA</span>
+          <span className="text-2xl font-black text-black tracking-tighter hidden sm:block">P2PIZZA</span>
         </div>
 
         <nav className="hidden lg:flex items-center gap-6">
-          <button onClick={() => onNavigate('home')} className="text-black hover:text-orange-600 font-bold transition-colors">Піца</button>
+          <button onClick={() => onNavigate('home')} className="text-black hover:text-orange-600 font-bold transition-colors">Меню</button>
           <button onClick={() => onNavigate('box')} className="flex items-center gap-1 text-black hover:text-orange-600 font-bold transition-colors text-sm">
             <Package size={16} className="text-orange-500" /> BOX
           </button>

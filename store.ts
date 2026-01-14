@@ -17,6 +17,18 @@ const STORAGE_KEYS = {
   REGISTERED_USERS: 'p2pizza_registered_users',
 };
 
+export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
+
+// Fix: Added getAdminPassword export to resolve import error in components/Auth.tsx
+export const getAdminPassword = (): string => {
+  return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || 'admin123';
+};
+
+// Fix: Added saveAdminPassword export to resolve import error in AdminPanel.tsx
+export const saveAdminPassword = (password: string) => {
+  localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, password);
+};
+
 export const getSupabaseConfig = () => ({
   url: localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || '',
   key: localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || '',
@@ -35,6 +47,29 @@ export const getSupabaseHeaders = () => {
     'Content-Type': 'application/json',
     'Prefer': 'return=representation'
   };
+};
+
+// Cloud Sync Helpers
+export const syncSettingsToCloud = async () => {
+  const { url } = getSupabaseConfig();
+  if (!url) return;
+  
+  const settings = [
+    { key: 'logo', value: getStoredLogo() },
+    { key: 'phone', value: getStoredShopPhone() },
+    { key: 'special', value: getStoredSpecial() },
+    { key: 'tg_config', value: getTelegramConfig() }
+  ];
+
+  try {
+    await fetch(`${url}/rest/v1/site_settings`, {
+      method: 'POST',
+      headers: getSupabaseHeaders(),
+      body: JSON.stringify(settings.map(s => ({ key: s.key, value: s.value })))
+    });
+  } catch (e) {
+    console.error('Cloud settings sync failed', e);
+  }
 };
 
 export const getStoredPizzas = (): Pizza[] => {
@@ -102,16 +137,8 @@ export const saveShopPhone = (phone: string) => {
   localStorage.setItem(STORAGE_KEYS.SHOP_PHONE, phone);
 };
 
-export const getAdminPassword = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || 'admin123';
-};
-
-export const saveAdminPassword = (password: string) => {
-  localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, password);
-};
-
 export const getStoredLogo = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
+  return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
 };
 
 export const saveLogo = (logo: string) => {

@@ -12,7 +12,8 @@ import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.
 import { 
   getStoredPizzas, savePizzas, getStoredUser, saveUser, 
   getStoredOrders, saveOrders, saveOrder, getStoredSpecial, 
-  getTelegramConfig, getSupabaseConfig, getSupabaseHeaders 
+  getTelegramConfig, getSupabaseConfig, getSupabaseHeaders,
+  saveLogo, saveShopPhone, saveSpecial, saveTelegramConfig
 } from './store.ts';
 
 interface FlyingPizza {
@@ -35,7 +36,6 @@ const App: React.FC = () => {
 
   const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
 
-  // Track the active order that is being cooked or ready
   const activeTrackerOrder = useMemo(() => {
     return orders.find(o => o.status === 'preparing' || o.status === 'ready');
   }, [orders]);
@@ -45,10 +45,12 @@ const App: React.FC = () => {
     if (!url) return;
     try {
       const headers = getSupabaseHeaders();
-      const [pRes, oRes] = await Promise.all([
+      const [pRes, oRes, sRes] = await Promise.all([
         fetch(`${url}/rest/v1/pizzas?select=*`, { headers }),
-        fetch(`${url}/rest/v1/orders?select=*&order=created_at.desc`, { headers })
+        fetch(`${url}/rest/v1/orders?select=*&order=created_at.desc`, { headers }),
+        fetch(`${url}/rest/v1/site_settings?select=*`, { headers })
       ]);
+
       if (pRes.ok) {
         const cloudPizzas = await pRes.json();
         if (Array.isArray(cloudPizzas) && cloudPizzas.length > 0) {
@@ -56,6 +58,7 @@ const App: React.FC = () => {
           savePizzas(cloudPizzas);
         }
       }
+      
       if (oRes.ok) {
         const cloudOrders = await oRes.json();
         if (Array.isArray(cloudOrders)) {
@@ -63,8 +66,22 @@ const App: React.FC = () => {
           saveOrders(cloudOrders);
         }
       }
+
+      if (sRes.ok) {
+        const cloudSettings = await sRes.json();
+        cloudSettings.forEach((s: any) => {
+          if (s.key === 'logo') saveLogo(s.value);
+          if (s.key === 'phone') saveShopPhone(s.value);
+          if (s.key === 'special') {
+            saveSpecial(s.value);
+            setSiteSpecial(s.value);
+          }
+          if (s.key === 'tg_config') saveTelegramConfig(s.value.token, s.value.chatId);
+        });
+        window.dispatchEvent(new Event('storage'));
+      }
     } catch (e) {
-      console.error('Cloud sync error', e);
+      console.error('Initial cloud sync error', e);
     }
   };
 
@@ -75,35 +92,6 @@ const App: React.FC = () => {
     setSiteSpecial(getStoredSpecial());
     fetchCloudData();
   }, []);
-
-  const sendTelegramNotification = async (order: Order) => {
-    const { token, chatId } = getTelegramConfig();
-    if (!token || !chatId) return;
-
-    const itemsText = order.items.map(i => `• ${i.name} (x${i.quantity})`).join('\n');
-    const paymentText = order.paymentMethod === 'cash' ? '💵 Готівка' : '💳 Карта при отриманні';
-    const typeText = order.type === 'delivery' ? `🚀 Доставка: ${order.address}, буд. ${order.houseNumber}` : `🏪 Самовивіз: ${order.pickupTime}`;
-    const commentText = order.notes ? `\n\n📝 КОМЕНТАР: ${order.notes}` : '';
-
-    const message = `🔔 НОВЕ ЗАМОВЛЕННЯ ${order.id}\n` +
-                    `----------------------\n` +
-                    `🍕 ТОВАРИ:\n${itemsText}\n\n` +
-                    `💰 РАЗОМ: ${order.total} грн\n` +
-                    `💳 ОПЛАТА: ${paymentText}\n` +
-                    `📍 ТИП: ${typeText}\n` +
-                    `📞 ТЕЛ: ${order.phone}${commentText}\n\n` +
-                    `⏰ Час: ${order.date}`;
-
-    try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: message })
-      });
-    } catch (e) {
-      console.error('Telegram notification error', e);
-    }
-  };
 
   const onUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
     const updatedOrders = orders.map(o => {
@@ -122,13 +110,22 @@ const App: React.FC = () => {
         method: 'PATCH',
         headers: getSupabaseHeaders(),
         body: JSON.stringify({ status })
-      }).catch(err => console.error(err));
+      }).catch(err => console.error('Status sync error', err));
     }
   };
 
   const handleUpdatePizzas = (newPizzas: Pizza[]) => {
     setPizzas([...newPizzas]);
     savePizzas([...newPizzas]);
+    
+    const { url } = getSupabaseConfig();
+    if (url) {
+      fetch(`${url}/rest/v1/pizzas`, {
+        method: 'POST',
+        headers: { ...getSupabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify(newPizzas)
+      }).catch(err => console.error('Menu sync error', err));
+    }
   };
 
   const handleAddToCart = (pizza: Pizza, rect: DOMRect) => {
@@ -168,7 +165,6 @@ const App: React.FC = () => {
     
     saveOrder(newOrder);
     setOrders(prev => [newOrder, ...prev]);
-    sendTelegramNotification(newOrder);
 
     const { url } = getSupabaseConfig();
     if (url) {
@@ -176,7 +172,7 @@ const App: React.FC = () => {
         method: 'POST',
         headers: getSupabaseHeaders(),
         body: JSON.stringify({ ...newOrder, created_at: new Date().toISOString() })
-      }).catch(err => console.error(err));
+      }).catch(err => console.error('Order cloud sync error', err));
     }
     
     setCartItems([]);
@@ -195,15 +191,15 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-32 md:pb-12 relative bg-[#fffaf5] text-black">
       <Header user={user} onOpenAuth={() => setIsAuthOpen(true)} onNavigate={setCurrentView} cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} />
       
-      {currentView === 'home' && (
+      {(currentView === 'home' || currentView === '') && (
         <>
-          <section className="relative h-[60vh] md:h-[75vh] flex items-center justify-center overflow-hidden">
+          <section className="relative h-[55vh] md:h-[75vh] flex items-center justify-center overflow-hidden">
             <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-[0.4]" alt="Hero" />
             <div className="container mx-auto px-4 z-10 text-center text-white">
-              <span className="bg-orange-500 px-4 md:px-6 py-1.5 md:py-2 rounded-full text-[8px] md:text-[10px] font-black uppercase mb-6 inline-block tracking-widest">{siteSpecial.badge}</span>
+              <span className="bg-orange-500 px-4 py-1.5 rounded-full text-[9px] font-black uppercase mb-6 inline-block tracking-widest">{siteSpecial.badge}</span>
               <h1 className="text-3xl md:text-7xl font-black mb-6 tracking-tighter uppercase leading-tight">{siteSpecial.title}</h1>
-              <p className="text-base md:text-xl max-w-2xl mx-auto mb-10 font-medium opacity-90 px-4">{siteSpecial.description}</p>
-              <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 hover:bg-white hover:text-orange-600 transition-all text-white px-8 md:px-12 py-4 md:py-5 rounded-full font-black uppercase shadow-2xl active:scale-95 text-xs md:text-sm">Замовити піцу</button>
+              <p className="text-sm md:text-xl max-w-2xl mx-auto mb-10 font-medium opacity-90 px-4">{siteSpecial.description}</p>
+              <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 hover:bg-white hover:text-orange-600 transition-all text-white px-8 py-4 rounded-full font-black uppercase shadow-2xl active:scale-95 text-xs">Переглянути меню</button>
             </div>
           </section>
 
@@ -213,38 +209,30 @@ const App: React.FC = () => {
                  startTime={activeTrackerOrder.preparingStartTime || Date.now()} 
                  isReadyOverride={activeTrackerOrder.status === 'ready'} 
                />
-               <div className="mt-4 text-center">
-                  <p className="text-[9px] font-black uppercase text-gray-400 bg-white/90 backdrop-blur-sm inline-block px-4 py-1.5 rounded-full border shadow-sm">Замовлення #{activeTrackerOrder.id} у роботі</p>
-               </div>
             </div>
           )}
         </>
       )}
 
-      <main id="menu" className="container mx-auto px-4 py-12 md:py-16">
-        <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">
-            {currentView === 'box' ? 'BOX МЕНЮ' : currentView === 'promotions' ? 'АКЦІЙНІ ПРОПОЗИЦІЇ' : currentView === 'favorites' ? 'ВАШІ УЛЮБЛЕНІ' : currentView === 'history' ? 'ІСТОРІЯ ЗАМОВЛЕНЬ' : 'Наше меню'}
+      <main id="menu" className="container mx-auto px-4 py-8 md:py-16">
+        <div className="mb-8">
+          <h2 className="text-2xl md:text-5xl font-black uppercase tracking-tighter">
+            {currentView === 'box' ? 'BOX МЕНЮ' : currentView === 'promotions' ? 'АКЦІЇ' : currentView === 'favorites' ? 'ВАШІ УЛЮБЛЕНІ' : currentView === 'history' ? 'ВАША ІСТОРІЯ' : 'Наше меню'}
           </h2>
-          <div className="h-1 flex-grow bg-orange-100/50 rounded-full hidden lg:block mx-8"></div>
         </div>
         
         {currentView === 'history' ? (
-          <div className="max-w-3xl mx-auto space-y-6">
-            {orders.length === 0 ? <div className="text-center py-32"><p className="text-gray-400 font-black uppercase tracking-widest text-[10px]">У вас ще немає замовлень</p></div> : 
+          <div className="max-w-3xl mx-auto space-y-4">
+            {orders.length === 0 ? <p className="text-center text-gray-400 py-32 font-black uppercase tracking-widest text-[10px]">Історія замовлень порожня</p> : 
               orders.map(o => (
-                <div key={o.id} className="bg-white p-6 rounded-[2.5rem] border border-orange-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
+                <div key={o.id} className="bg-white p-5 rounded-[2rem] border border-orange-50 flex justify-between items-center shadow-sm">
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                       <span className="font-black text-[9px] uppercase tracking-tighter bg-black text-white px-3 py-1 rounded-lg">{o.id}</span>
-                       <span className="text-[9px] text-gray-400 font-bold uppercase">{o.date}</span>
-                    </div>
-                    <p className="text-sm font-bold text-gray-800">{o.items.map(i => `${i.name} (x${i.quantity})`).join(', ')}</p>
-                    <div className={`mt-2 text-[9px] font-black uppercase tracking-widest ${o.status === 'completed' ? 'text-green-500' : 'text-orange-500'}`}>Статус: {o.status === 'pending' ? 'Очікує' : o.status === 'preparing' ? 'Готується' : o.status === 'ready' ? 'Готово' : o.status === 'completed' ? 'Виконано' : 'Скасовано'}</div>
+                    <p className="font-black text-[9px] uppercase text-gray-400 mb-1">{o.id} • {o.date}</p>
+                    <p className="text-sm font-bold">{o.items.map(i => i.name).join(', ')}</p>
+                    <p className={`text-[9px] font-black mt-1 uppercase tracking-widest ${o.status === 'completed' ? 'text-green-500' : 'text-orange-500'}`}>{o.status}</p>
                   </div>
-                  <div className="text-right w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 flex sm:flex-col items-center sm:items-end justify-between">
-                    <span className="text-gray-400 text-[10px] font-black uppercase sm:hidden">Сума</span>
-                    <p className="font-black text-2xl text-orange-600">{o.total} грн</p>
+                  <div className="text-right">
+                    <p className="font-black text-lg">{o.total} грн</p>
                   </div>
                 </div>
               ))
@@ -271,7 +259,6 @@ const App: React.FC = () => {
 
       <Footer />
       
-      {/* Mobile Navigation Bar */}
       <MobileNav currentView={currentView} onNavigate={setCurrentView} hasUser={!!user} />
 
       <Cart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} items={cartItems} onUpdateQuantity={(id, d) => setCartItems(prev => prev.map(i => i.id === id ? {...i, quantity: Math.max(1, i.quantity+d)} : i))} onRemove={(id) => setCartItems(prev => prev.filter(i=>i.id!==id))} onPlaceOrder={handlePlaceOrder} />
@@ -279,7 +266,7 @@ const App: React.FC = () => {
       {currentView === 'admin' && user?.role === 'admin' && <AdminPanel pizzas={pizzas} onUpdatePizzas={handleUpdatePizzas} orders={orders} onUpdateOrderStatus={onUpdateOrderStatus} onClose={() => setCurrentView('home')} />}
 
       {flyingPizzas.map(p => (
-        <div key={p.id} className="fixed z-[300] pointer-events-none w-20 h-20 md:w-24 md:h-24 rounded-full shadow-2xl overflow-hidden border-4 border-white animate-pizza-fly" style={{ left: p.startX, top: p.startY }}>
+        <div key={p.id} className="fixed z-[300] pointer-events-none w-16 h-16 md:w-24 md:h-24 rounded-full shadow-2xl overflow-hidden border-4 border-white animate-pizza-fly" style={{ left: p.startX, top: p.startY }}>
           <img src={p.image} className="w-full h-full object-cover" alt="Fly" />
         </div>
       ))}
@@ -287,10 +274,10 @@ const App: React.FC = () => {
       <style>{`
         @keyframes pizzaFly {
           0% { transform: scale(1) translate(0, 0) rotate(0deg); opacity: 1; }
-          20% { transform: scale(1.3) translate(80px, -180px) rotate(45deg); opacity: 1; }
+          20% { transform: scale(1.3) translate(50px, -150px) rotate(45deg); opacity: 1; }
           100% { 
-            left: calc(100vw - 80px); 
-            top: 40px; 
+            left: calc(100vw - 60px); 
+            top: 20px; 
             transform: scale(0.1) translate(0, 0) rotate(720deg); 
             opacity: 0; 
           }
