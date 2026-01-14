@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { 
   getStoredShopPhone, saveShopPhone, getTelegramConfig, 
-  saveTelegramConfig, getStoredLogo, saveLogo, getStoredSpecial, saveSpecial
+  saveTelegramConfig, getStoredLogo, saveLogo, getStoredSpecial, saveSpecial, savePizzasToDB
 } from './store';
 
 interface AdminPanelProps {
@@ -50,15 +50,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
     }
   };
 
-  const handleSaveAll = () => {
+  const handleSaveAll = async () => {
     saveShopPhone(shopPhone);
     saveLogo(siteLogo);
     saveTelegramConfig(tgToken, tgChatId);
     saveSpecial(siteSpecial);
     
-    setStatusMessage('Всі зміни збережено!');
+    setStatusMessage('Налаштування сайту збережено!');
     setTimeout(() => setStatusMessage(null), 3000);
     window.dispatchEvent(new Event('storage'));
+  };
+
+  const handleSavePizza = async () => {
+    let updatedPizzas: Pizza[];
+    if (editingId === 'new') {
+      updatedPizzas = [{ ...editForm, id: 'p' + Date.now() } as Pizza, ...pizzas];
+    } else {
+      updatedPizzas = pizzas.map(p => p.id === editingId ? { ...p, ...editForm } as Pizza : p);
+    }
+    
+    onUpdatePizzas(updatedPizzas);
+    const success = await savePizzasToDB(updatedPizzas);
+    
+    if (success) {
+      setStatusMessage('Меню оновлено в базі даних!');
+    } else {
+      setStatusMessage('Помилка збереження в БД!');
+    }
+    
+    setTimeout(() => setStatusMessage(null), 3000);
+    setEditingId(null);
+  };
+
+  const handleDeletePizza = async (id: string) => {
+    if (confirm('Видалити цей товар?')) {
+      const updated = pizzas.filter(x => x.id !== id);
+      onUpdatePizzas(updated);
+      await savePizzasToDB(updated);
+      setStatusMessage('Товар видалено');
+      setTimeout(() => setStatusMessage(null), 3000);
+    }
   };
 
   return (
@@ -66,7 +97,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-10">
           <h1 className="text-3xl font-black uppercase tracking-tighter">P2P <span className="text-orange-500">ADMIN</span></h1>
-          <button onClick={onClose} className="p-2 bg-gray-100 rounded-full"><X size={24}/></button>
+          <button onClick={onClose} className="p-2 bg-gray-100 rounded-full hover:bg-orange-100 transition-colors"><X size={24}/></button>
         </div>
 
         <div className="flex gap-4 mb-10 overflow-x-auto pb-2 scrollbar-hide">
@@ -77,7 +108,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
 
         {activeTab === 'settings' && (
           <div className="max-w-4xl space-y-8">
-            {/* РЕДАКТОР АКЦІЇ (HERO SECTION) */}
             <div className="bg-white p-8 border-2 border-orange-400 rounded-[3rem] shadow-xl">
                <div className="flex items-center gap-4 mb-8">
                   <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white"><Sparkles size={28} /></div>
@@ -125,7 +155,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
             </div>
 
             <div className="bg-white p-8 border-2 border-blue-100 rounded-[3rem] shadow-sm">
-              <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Send size={20} className="text-blue-500"/> Telegram (Лише текст)</h2>
+              <h2 className="text-xl font-black uppercase mb-6 flex items-center gap-2"><Send size={20} className="text-blue-500"/> Telegram (Сповіщення)</h2>
               <div className="grid md:grid-cols-2 gap-4">
                 <input className="w-full p-4 border rounded-xl bg-gray-50 font-bold" placeholder="Bot Token" value={tgToken} onChange={e=>setTgToken(e.target.value)} />
                 <input className="w-full p-4 border rounded-xl bg-gray-50 font-bold" placeholder="Chat ID" value={tgChatId} onChange={e=>setTgChatId(e.target.value)} />
@@ -154,7 +184,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
                       <td className="p-5 font-black text-sm">{p.price} грн</td>
                       <td className="p-5 text-right space-x-2">
                         <button onClick={()=>{setEditingId(p.id); setEditForm(p);}} className="p-2.5 bg-blue-500 text-white rounded-xl"><Edit2 size={16}/></button>
-                        <button onClick={()=>{if(confirm('Видалити?')) onUpdatePizzas(pizzas.filter(x=>x.id!==p.id))}} className="p-2.5 bg-red-500 text-white rounded-xl"><Trash2 size={16}/></button>
+                        <button onClick={()=>handleDeletePizza(p.id)} className="p-2.5 bg-red-500 text-white rounded-xl"><Trash2 size={16}/></button>
                       </td>
                     </tr>
                   ))}
@@ -211,19 +241,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
               <textarea className="w-full p-4 border rounded-xl bg-gray-50 font-medium text-xs h-24 outline-none resize-none" placeholder="Опис" value={editForm.description} onChange={e=>setEditForm({...editForm, description: e.target.value})}/>
             </div>
             <div className="flex gap-4">
-              <button onClick={() => {
-                if (editingId === 'new') onUpdatePizzas([{...editForm, id: 'p'+Date.now()} as Pizza, ...pizzas]);
-                else onUpdatePizzas(pizzas.map(p=>p.id===editingId?{...p, ...editForm} as Pizza:p));
-                setEditingId(null);
-              }} className="flex-grow bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs">Зберегти</button>
-              <button onClick={()=>setEditingId(null)} className="px-6 py-5 bg-gray-100 rounded-2xl font-black uppercase text-xs">Скасувати</button>
+              <button onClick={handleSavePizza} className="flex-grow bg-orange-500 text-white py-5 rounded-2xl font-black uppercase text-xs shadow-lg hover:bg-black transition-all">Зберегти</button>
+              <button onClick={()=>setEditingId(null)} className="px-6 py-5 bg-gray-100 rounded-2xl font-black uppercase text-xs hover:bg-gray-200 transition-all">Скасувати</button>
             </div>
           </div>
         </div>
       )}
 
       {statusMessage && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-black text-white px-10 py-4 rounded-full font-black text-xs uppercase z-[300] shadow-2xl">
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-black text-white px-10 py-4 rounded-full font-black text-xs uppercase z-[300] shadow-2xl border border-white/20">
           {statusMessage}
         </div>
       )}

@@ -13,14 +13,10 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
-// Helper for safe JSON fetching
 const safeFetch = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) {
-      console.warn(`Fetch to ${url} returned status ${res.status}`);
-      return null;
-    }
+    if (!res.ok) return null;
     const contentType = res.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       return await res.json();
@@ -73,15 +69,25 @@ export const sendTelegramNotification = async (order: Order) => {
 
 export const fetchPizzas = async (): Promise<Pizza[]> => {
   const data = await safeFetch('/api/pizzas');
-  return data && Array.isArray(data) && data.length > 0 ? data : INITIAL_PIZZAS;
+  // Якщо ми отримали масив від API, використовуємо його. 
+  // Тільки якщо API повернуло помилку (null) або абсолютно порожню базу на першому етапі, 
+  // ми показуємо початкові дані.
+  if (Array.isArray(data) && data.length > 0) {
+    return data;
+  }
+  return INITIAL_PIZZAS;
 };
 
 export const savePizzasToDB = async (pizzas: Pizza[]) => {
-  await safeFetch('/api/pizzas', {
+  // Перед відправкою на сервер також видаляємо _id, якщо вони є у фронтенд-стейті
+  const sanitizedPizzas = pizzas.map(({ _id, ...rest }: any) => rest);
+  
+  const result = await safeFetch('/api/pizzas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pizzas })
+    body: JSON.stringify({ pizzas: sanitizedPizzas })
   });
+  return !!result;
 };
 
 export const fetchOrders = async (): Promise<Order[]> => {
@@ -105,7 +111,7 @@ export const updateOrderStatusInDB = async (id: string, status: string) => {
   });
 };
 
-// Local storage for simple settings
+// Local storage settings
 export const getStoredLogo = () => localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
 export const saveLogo = (logo: string) => localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
 export const getStoredShopPhone = () => localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';

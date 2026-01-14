@@ -9,6 +9,7 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'GET') {
       const pizzas = await collection.find({}).toArray();
+      // Повертаємо масив, навіть якщо він порожній
       return res.status(200).json(pizzas || []);
     }
 
@@ -17,9 +18,14 @@ export default async function handler(req: any, res: any) {
       if (!Array.isArray(pizzas)) {
         return res.status(400).json({ error: 'Invalid data format' });
       }
+
+      // ВАЖЛИВО: Видаляємо _id з кожного об'єкта перед збереженням, 
+      // щоб MongoDB не видавала помилку дублювання ключів
+      const cleanedPizzas = pizzas.map(({ _id, ...rest }: any) => rest);
+
       await collection.deleteMany({});
-      if (pizzas.length > 0) {
-        await collection.insertMany(pizzas);
+      if (cleanedPizzas.length > 0) {
+        await collection.insertMany(cleanedPizzas);
       }
       return res.status(200).json({ success: true });
     }
@@ -27,6 +33,6 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ message: 'Method not allowed' });
   } catch (error: any) {
     console.error('API Pizzas Error:', error);
-    return res.status(500).json({ error: 'Database connection failed', details: error.message });
+    return res.status(500).json({ error: 'Database error', details: error.message });
   }
 }
