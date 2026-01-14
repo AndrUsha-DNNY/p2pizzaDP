@@ -11,9 +11,16 @@ import Footer from './components/Footer.tsx';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
 import { 
   getStoredPizzas, savePizzas, getStoredUser, saveUser, 
-  getStoredOrders, saveOrders, getStoredSpecial, 
-  getSupabaseConfig, getSupabaseHeaders, sendTelegramNotification
+  getStoredOrders, saveOrders, getStoredSpecial, sendTelegramNotification,
+  getSupabaseConfig, getSupabaseHeaders
 } from './store.ts';
+
+interface FlyingPizza {
+  id: string;
+  image: string;
+  startX: number;
+  startY: number;
+}
 
 const App: React.FC = () => {
   const [pizzas, setPizzas] = useState<Pizza[]>([]);
@@ -23,52 +30,62 @@ const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [flyingPizzas, setFlyingPizzas] = useState<any[]>([]);
+  const [flyingPizzas, setFlyingPizzas] = useState<FlyingPizza[]>([]);
   const [siteSpecial] = useState<SiteSpecial>(getStoredSpecial());
 
   const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
 
-  // Завантаження даних з хмари (Supabase)
+  const activeTrackerOrder = useMemo(() => {
+    return orders.find(o => o.status === 'Готується' || o.status === 'Готово');
+  }, [orders]);
+
   const syncWithCloud = async () => {
     const { url } = getSupabaseConfig();
     if (!url) return;
-
     try {
       const headers = getSupabaseHeaders();
-      // 1. Тягнемо піци
-      const pRes = await fetch(`${url}/rest/v1/pizzas?select=*`, { headers });
+      const [pRes, oRes] = await Promise.all([
+        fetch(`${url}/rest/v1/pizzas?select=*`, { headers }),
+        fetch(`${url}/rest/v1/orders?select=*&order=created_at.desc`, { headers })
+      ]);
       if (pRes.ok) {
         const cloudPizzas = await pRes.json();
-        if (cloudPizzas.length > 0) {
-          setPizzas(cloudPizzas);
-          savePizzas(cloudPizzas);
-        }
+        if (cloudPizzas.length > 0) { setPizzas(cloudPizzas); savePizzas(cloudPizzas); }
       }
-      // 2. Тягнемо замовлення (для адміна)
-      const oRes = await fetch(`${url}/rest/v1/orders?select=*&order=created_at.desc`, { headers });
       if (oRes.ok) {
         const cloudOrders = await oRes.json();
-        setOrders(cloudOrders);
-        saveOrders(cloudOrders);
+        setOrders(cloudOrders); saveOrders(cloudOrders);
       }
-    } catch (e) {
-      console.error("Cloud sync error:", e);
-    }
+    } catch (e) { console.error("Sync error", e); }
   };
 
   useEffect(() => {
-    // Спочатку завантажуємо локальні (для швидкості)
     setPizzas(getStoredPizzas());
     setUser(getStoredUser());
     setOrders(getStoredOrders());
-    
-    // Потім синхронізуємо з базою
     syncWithCloud();
-    
-    // Перевіряємо базу кожну хвилину
-    const timer = setInterval(syncWithCloud, 60000);
-    return () => clearInterval(timer);
+    const interval = setInterval(syncWithCloud, 60000); // Синхронізація кожну хвилину
+    return () => clearInterval(interval);
   }, []);
+
+  const handleAddToCart = (pizza: Pizza, rect: DOMRect) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setFlyingPizzas(prev => [...prev, { 
+      id, 
+      image: pizza.image || 'https://i.ibb.co/3ykCjFz/p2p-logo.png', 
+      startX: rect.left, 
+      startY: rect.top + window.scrollY 
+    }]);
+
+    setTimeout(() => {
+      setCartItems(prev => {
+        const exist = prev.find(i => i.id === pizza.id);
+        if (exist) return prev.map(i => i.id === pizza.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return [...prev, { ...pizza, quantity: 1 }];
+      });
+      setFlyingPizzas(prev => prev.filter(p => p.id !== id));
+    }, 1000);
+  };
 
   const handlePlaceOrder = async (orderData: Partial<Order>) => {
     const newOrder: Order = {
@@ -81,16 +98,14 @@ const App: React.FC = () => {
       houseNumber: orderData.houseNumber,
       phone: orderData.phone,
       paymentMethod: orderData.paymentMethod || 'cash',
-      status: 'pending',
+      status: 'Нове',
       notes: orderData.notes
     };
 
-    // 1. Зберігаємо локально
     const updatedOrders = [newOrder, ...orders];
     setOrders(updatedOrders);
     saveOrders(updatedOrders);
 
-    // 2. Відправляємо в базу Supabase (щоб побачити на інших пристроях)
     const { url } = getSupabaseConfig();
     if (url) {
       fetch(`${url}/rest/v1/orders`, {
@@ -100,22 +115,19 @@ const App: React.FC = () => {
       });
     }
 
-    // 3. ПОВІДОМЛЕННЯ В TELEGRAM (Саме тут відбувається магія)
     await sendTelegramNotification(newOrder);
 
     setCartItems([]);
     setIsCartOpen(false);
     setCurrentView('history');
-    alert('Замовлення прийнято! Очікуйте на повідомлення.');
   };
 
-  const handleUpdatePizzas = async (newPizzas: Pizza[]) => {
-    setPizzas(newPizzas);
-    savePizzas(newPizzas);
-    
+  const handleUpdatePizzas = (newPizzas: Pizza[]) => {
+    setPizzas([...newPizzas]);
+    savePizzas([...newPizzas]);
     const { url } = getSupabaseConfig();
     if (url) {
-      await fetch(`${url}/rest/v1/pizzas`, {
+      fetch(`${url}/rest/v1/pizzas`, {
         method: 'POST',
         headers: { ...getSupabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify(newPizzas)
@@ -123,14 +135,23 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateStatus = async (id: string, status: OrderStatus) => {
-    const updated = orders.map(o => o.id === id ? { ...o, status } : o);
+  const handleUpdateStatus = (id: string, status: OrderStatus) => {
+    const updated = orders.map(o => {
+      if (o.id === id) {
+        return { 
+          ...o, 
+          status, 
+          preparingStartTime: status === 'Готується' ? Date.now() : o.preparingStartTime 
+        };
+      }
+      return o;
+    });
     setOrders(updated);
     saveOrders(updated);
 
     const { url } = getSupabaseConfig();
     if (url) {
-      await fetch(`${url}/rest/v1/orders?id=eq.${id}`, {
+      fetch(`${url}/rest/v1/orders?id=eq.${id}`, {
         method: 'PATCH',
         headers: getSupabaseHeaders(),
         body: JSON.stringify({ status })
@@ -150,19 +171,30 @@ const App: React.FC = () => {
       <Header user={user} onOpenAuth={() => setIsAuthOpen(true)} onNavigate={setCurrentView} cartCount={cartCount} onOpenCart={() => setIsCartOpen(true)} />
       
       {currentView === 'home' && (
-        <section className="relative h-[60vh] flex items-center justify-center overflow-hidden">
-          <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Hero" />
-          <div className="relative z-10 text-center text-white px-4">
-            <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter">{siteSpecial.title}</h1>
-            <p className="text-lg opacity-90 max-w-xl mx-auto mb-8">{siteSpecial.description}</p>
-            <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 text-white px-10 py-4 rounded-full font-black uppercase shadow-xl hover:bg-white hover:text-orange-500 transition-all">Замовити зараз</button>
-          </div>
-        </section>
+        <>
+          <section className="relative h-[60vh] flex items-center justify-center overflow-hidden">
+            <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Hero" />
+            <div className="relative z-10 text-center text-white px-4">
+              <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter">{siteSpecial.title}</h1>
+              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8">{siteSpecial.description}</p>
+              <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 text-white px-10 py-4 rounded-full font-black uppercase shadow-xl hover:bg-white hover:text-orange-500 transition-all">Замовити зараз</button>
+            </div>
+          </section>
+
+          {activeTrackerOrder && (
+            <div className="container mx-auto px-4 -mt-16 relative z-20 max-w-2xl">
+              <CookingTracker 
+                startTime={activeTrackerOrder.preparingStartTime || Date.now()} 
+                isReadyOverride={activeTrackerOrder.status === 'Готово'} 
+              />
+            </div>
+          )}
+        </>
       )}
 
       <main id="menu" className="container mx-auto px-4 py-12">
         <h2 className="text-3xl font-black uppercase mb-10 tracking-tighter">
-          {currentView === 'history' ? 'Історія замовлень' : 'Наше Меню'}
+          {currentView === 'history' ? 'Ваша історія' : 'Наше Меню'}
         </h2>
         
         {currentView === 'history' ? (
@@ -173,7 +205,7 @@ const App: React.FC = () => {
                   <div>
                     <p className="font-black text-xs text-gray-400 mb-1">{o.id} • {o.date}</p>
                     <p className="font-bold">{o.items.map(i => i.name).join(', ')}</p>
-                    <p className="text-[10px] font-black uppercase mt-1 text-orange-500">{o.status}</p>
+                    <p className={`text-[10px] font-black uppercase mt-1 ${o.status === 'Скасовано' ? 'text-red-500' : 'text-orange-500'}`}>{o.status}</p>
                   </div>
                   <p className="font-black text-xl">{o.total} грн</p>
                 </div>
@@ -186,13 +218,7 @@ const App: React.FC = () => {
               <PizzaCard 
                 key={p.id} 
                 pizza={p} 
-                onAddToCart={(pizza, rect) => {
-                  setCartItems(prev => {
-                    const exist = prev.find(i => i.id === pizza.id);
-                    if (exist) return prev.map(i => i.id === pizza.id ? { ...i, quantity: i.quantity + 1 } : i);
-                    return [...prev, { ...pizza, quantity: 1 }];
-                  });
-                }} 
+                onAddToCart={handleAddToCart} 
                 isFavorite={user?.favorites.includes(p.id) || false} 
                 onToggleFavorite={(id) => {
                   if (!user) { setIsAuthOpen(true); return; }
@@ -210,6 +236,28 @@ const App: React.FC = () => {
       <Cart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} items={cartItems} onUpdateQuantity={(id, d) => setCartItems(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i))} onRemove={(id) => setCartItems(prev => prev.filter(i => i.id !== id))} onPlaceOrder={handlePlaceOrder} />
       <Auth isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} currentUser={user} onLogin={(u) => {setUser(u); saveUser(u);}} onLogout={() => {setUser(null); saveUser(null);}} />
       {currentView === 'admin' && user?.role === 'admin' && <AdminPanel pizzas={pizzas} onUpdatePizzas={handleUpdatePizzas} orders={orders} onUpdateOrderStatus={handleUpdateStatus} onClose={() => setCurrentView('home')} />}
+
+      {flyingPizzas.map(p => (
+        <div key={p.id} className="fixed z-[300] pointer-events-none w-16 h-16 md:w-24 md:h-24 rounded-full shadow-2xl overflow-hidden border-4 border-white animate-pizza-fly" style={{ left: p.startX, top: p.startY }}>
+          <img src={p.image} className="w-full h-full object-cover" alt="Fly" />
+        </div>
+      ))}
+
+      <style>{`
+        @keyframes pizzaFly {
+          0% { transform: scale(1) translate(0, 0) rotate(0deg); opacity: 1; }
+          20% { transform: scale(1.3) translate(50px, -150px) rotate(45deg); opacity: 1; }
+          100% { 
+            left: calc(100vw - 60px); 
+            top: 20px; 
+            transform: scale(0.1) translate(0, 0) rotate(720deg); 
+            opacity: 0; 
+          }
+        }
+        .animate-pizza-fly {
+          animation: pizzaFly 1s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        }
+      `}</style>
     </div>
   );
 };

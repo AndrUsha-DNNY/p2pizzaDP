@@ -16,14 +16,14 @@ export interface CartItem extends Pizza {
   quantity: number;
 }
 
-export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'delivered' | 'completed' | 'cancelled';
+export type OrderStatus = 'Нове' | 'Готується' | 'Готово' | 'Доставлено' | 'Виконано' | 'Скасовано';
 
 export interface Order {
   id: string;
   items: CartItem[];
   total: number;
   date: string;
-  preparingStartTime?: number; // timestamp when admin set status to 'preparing'
+  preparingStartTime?: number;
   type: 'delivery' | 'pickup';
   address?: string;
   houseNumber?: string;
@@ -46,6 +46,6 @@ export interface User {
   email: string;
   name: string;
   role: 'user' | 'admin';
-  favorites: string[]; // ids of pizzas
+  favorites: string[];
   history: Order[];
 }
