@@ -42,12 +42,18 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      setIsLoading(true);
-      const [dbPizzas, dbOrders] = await Promise.all([fetchPizzas(), fetchOrders()]);
-      setPizzas(dbPizzas);
-      setOrders(dbOrders);
-      setUser(getStoredUser());
-      setIsLoading(false);
+      try {
+        setIsLoading(true);
+        // fetchPizzas and fetchOrders now have internal try-catches and return defaults on fail
+        const [dbPizzas, dbOrders] = await Promise.all([fetchPizzas(), fetchOrders()]);
+        setPizzas(dbPizzas);
+        setOrders(dbOrders);
+        setUser(getStoredUser());
+      } catch (error) {
+        console.error("Initial load failed", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     loadData();
 
@@ -120,7 +126,7 @@ const App: React.FC = () => {
     return (
       <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
         <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="font-black uppercase text-xs tracking-widest text-orange-500">Завантажуємо меню...</p>
+        <p className="font-black uppercase text-xs tracking-widest text-orange-500 animate-pulse">З'єднуємо з базою...</p>
       </div>
     );
   }
@@ -173,19 +179,23 @@ const App: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {filteredPizzas.map(p => (
-              <PizzaCard 
-                key={p.id} 
-                pizza={p} 
-                onAddToCart={handleAddToCart} 
-                isFavorite={user?.favorites.includes(p.id) || false} 
-                onToggleFavorite={(id) => {
-                  if (!user) { setIsAuthOpen(true); return; }
-                  const updated = { ...user, favorites: user.favorites.includes(id) ? user.favorites.filter(f => f !== id) : [...user.favorites, id] };
-                  setUser(updated); saveUser(updated);
-                }} 
-              />
-            ))}
+            {filteredPizzas.length > 0 ? (
+              filteredPizzas.map(p => (
+                <PizzaCard 
+                  key={p.id} 
+                  pizza={p} 
+                  onAddToCart={handleAddToCart} 
+                  isFavorite={user?.favorites.includes(p.id) || false} 
+                  onToggleFavorite={(id) => {
+                    if (!user) { setIsAuthOpen(true); return; }
+                    const updated = { ...user, favorites: user.favorites.includes(id) ? user.favorites.filter(f => f !== id) : [...user.favorites, id] };
+                    setUser(updated); saveUser(updated);
+                  }} 
+                />
+              ))
+            ) : (
+              <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase text-xs">Тут поки порожньо...</p>
+            )}
           </div>
         )}
       </main>

@@ -13,7 +13,6 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
-// Telegram config (все ще тримаємо в локалці для зручності адміна)
 export const getTelegramConfig = () => ({
   token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
   chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
@@ -42,25 +41,39 @@ export const sendTelegramNotification = async (order: Order) => {
   const items = order.items.map(i => `• ${i.name} (x${i.quantity})`).join('\n');
   const text = `🔔 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>\n💰 <b>СУМА: ${order.total} грн</b>\n📞 <b>ТЕЛ:</b> ${order.phone}\n🍕 <b>ТОВАРИ:</b>\n${items}`;
 
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
-  });
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+    });
+  } catch (e) { console.error('TG notify error', e); }
 };
 
-// --- MongoDB API Calls ---
+// --- MongoDB API Calls with Improved Error Handling ---
+
+const safeFetch = async (url: string, options?: RequestInit) => {
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.warn(`API error at ${url}: ${res.status}`, errorText);
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    console.error(`Fetch failed at ${url}:`, e);
+    return null;
+  }
+};
 
 export const fetchPizzas = async (): Promise<Pizza[]> => {
-  try {
-    const res = await fetch('/api/pizzas');
-    const data = await res.json();
-    return data.length > 0 ? data : INITIAL_PIZZAS;
-  } catch (e) { return INITIAL_PIZZAS; }
+  const data = await safeFetch('/api/pizzas');
+  return data && Array.isArray(data) && data.length > 0 ? data : INITIAL_PIZZAS;
 };
 
 export const savePizzasToDB = async (pizzas: Pizza[]) => {
-  await fetch('/api/pizzas', {
+  await safeFetch('/api/pizzas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pizzas })
@@ -68,12 +81,12 @@ export const savePizzasToDB = async (pizzas: Pizza[]) => {
 };
 
 export const fetchOrders = async (): Promise<Order[]> => {
-  const res = await fetch('/api/orders');
-  return res.json();
+  const data = await safeFetch('/api/orders');
+  return Array.isArray(data) ? data : [];
 };
 
 export const saveOrderToDB = async (order: Order) => {
-  await fetch('/api/orders', {
+  await safeFetch('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(order)
@@ -81,14 +94,14 @@ export const saveOrderToDB = async (order: Order) => {
 };
 
 export const updateOrderStatusInDB = async (id: string, status: string) => {
-  await fetch('/api/orders', {
+  await safeFetch('/api/orders', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, status })
   });
 };
 
-// Решта налаштувань поки залишаємо в локалці для швидкості завантаження інтерфейсу
+// Local storage settings
 export const getStoredLogo = () => localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
 export const saveLogo = (logo: string) => localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
 export const getStoredShopPhone = () => localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';
