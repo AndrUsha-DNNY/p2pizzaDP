@@ -13,7 +13,6 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
-// Допоміжна функція для запитів
 const safeFetch = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
@@ -42,7 +41,7 @@ export const setupWebhook = async () => {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
     const data = await res.json();
-    alert(data.ok ? 'Webhook активовано!' : 'Помилка Telegram API');
+    alert(data.ok ? 'Webhook активний!' : 'Помилка API');
   } catch (e) { alert('Помилка з’єднання'); }
 };
 
@@ -51,7 +50,25 @@ export const sendTelegramNotification = async (order: Order) => {
   if (!token || !chatId) return;
 
   const items = order.items.map(i => `• ${i.name} (x${i.quantity})`).join('\n');
-  const text = `🔔 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>\n💰 <b>СУМА: ${order.total} грн</b>\n📞 <b>ТЕЛ:</b> ${order.phone}\n🍕 <b>ТОВАРИ:</b>\n${items}`;
+  const payEmoji = order.paymentMethod === 'cash' ? '💵' : '💳';
+  const payText = order.paymentMethod === 'cash' ? 'Готівка' : 'Картою при отриманні';
+  const typeEmoji = order.type === 'delivery' ? '🚚' : '🥡';
+  const typeText = order.type === 'delivery' ? 'Доставка' : 'Самовивіз';
+  
+  const addressLine = order.type === 'delivery' 
+    ? `📍 <b>ТИП:</b> ${typeEmoji} ${typeText}\n🏠 <b>АДРЕСА:</b> ${order.address}, буд. ${order.houseNumber}`
+    : `📍 <b>ТИП:</b> ${typeEmoji} ${typeText}\n🕒 <b>ЧАС:</b> ${order.pickupTime}`;
+
+  const text = `🔔 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>\n` +
+               `------------------------------\n` +
+               `🍕 <b>ТОВАРИ:</b>\n${items}\n\n` +
+               `💰 <b>РАЗОМ: ${order.total} грн</b>\n` +
+               `${payEmoji} <b>ОПЛАТА:</b> ${payEmoji} ${payText}\n` +
+               `${addressLine}\n` +
+               `📞 <b>ТЕЛ:</b> <code>${order.phone}</code>\n` +
+               `📝 <b>КОМЕНТАР:</b> ${order.notes || 'немає'}\n` +
+               `------------------------------\n` +
+               `⏰ <b>Час: ${order.date}</b>`;
 
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -61,8 +78,6 @@ export const sendTelegramNotification = async (order: Order) => {
     });
   } catch (e) { console.error('TG notify error', e); }
 };
-
-// --- MongoDB API Calls ---
 
 export const fetchPizzas = async (): Promise<Pizza[]> => {
   const data = await safeFetch('/api/pizzas');
@@ -84,11 +99,12 @@ export const fetchOrders = async (): Promise<Order[]> => {
 };
 
 export const saveOrderToDB = async (order: Order) => {
-  await safeFetch('/api/orders', {
+  const res = await fetch('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(order)
   });
+  return res.ok;
 };
 
 export const updateOrderStatusInDB = async (id: string, status: string) => {
@@ -99,10 +115,9 @@ export const updateOrderStatusInDB = async (id: string, status: string) => {
   });
 };
 
-// Налаштування сайту (залишаємо в LocalStorage для швидкості, або теж можна в БД)
 export const getStoredLogo = () => localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
 export const saveLogo = (logo: string) => localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
-export const getStoredShopPhone = () => localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';
+export const getStoredShopPhone = () => localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 00 000 00 00';
 export const saveShopPhone = (phone: string) => localStorage.setItem(STORAGE_KEYS.SHOP_PHONE, phone);
 export const getStoredSpecial = (): SiteSpecial => {
   const data = localStorage.getItem(STORAGE_KEYS.SITE_SPECIAL);
