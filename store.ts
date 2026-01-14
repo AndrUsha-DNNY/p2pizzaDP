@@ -13,21 +13,14 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
+// Допоміжна функція для запитів
 const safeFetch = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`API Error (${res.status}): ${errorText}`);
-      return null;
-    }
-    const contentType = res.headers.get("content-type");
-    if (contentType && contentType.includes("application/json")) {
-      return await res.json();
-    }
-    return null;
+    if (!res.ok) return null;
+    return await res.json();
   } catch (err) {
-    console.error(`Fetch failed for ${url}:`, err);
+    console.error(`Fetch error for ${url}:`, err);
     return null;
   }
 };
@@ -44,12 +37,12 @@ export const saveTelegramConfig = (token: string, chatId: string) => {
 
 export const setupWebhook = async () => {
   const { token } = getTelegramConfig();
-  if (!token) return alert('Введіть токен!');
+  if (!token) return alert('Спочатку введіть Token!');
   const webhookUrl = `${window.location.origin}/api/webhook?token=${token}`;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
     const data = await res.json();
-    alert(data.ok ? 'Webhook активний!' : 'Помилка: ' + data.description);
+    alert(data.ok ? 'Webhook активовано!' : 'Помилка Telegram API');
   } catch (e) { alert('Помилка з’єднання'); }
 };
 
@@ -73,28 +66,21 @@ export const sendTelegramNotification = async (order: Order) => {
 
 export const fetchPizzas = async (): Promise<Pizza[]> => {
   const data = await safeFetch('/api/pizzas');
-  // Якщо API повернуло null (помилка), використовуємо константи.
-  // Якщо API повернуло порожній масив [], значить в базі дійсно нічого немає, 
-  // але при першому запуску (коли база ще не ініціалізована) зазвичай хочеться бачити INITIAL_PIZZAS.
-  if (Array.isArray(data)) {
-    return data.length > 0 ? data : INITIAL_PIZZAS;
-  }
-  return INITIAL_PIZZAS;
+  return data && data.length > 0 ? data : INITIAL_PIZZAS;
 };
 
 export const savePizzasToDB = async (pizzas: Pizza[]) => {
-  const sanitizedPizzas = pizzas.map(({ _id, ...rest }: any) => rest);
   const result = await safeFetch('/api/pizzas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pizzas: sanitizedPizzas })
+    body: JSON.stringify({ pizzas })
   });
   return !!result;
 };
 
 export const fetchOrders = async (): Promise<Order[]> => {
   const data = await safeFetch('/api/orders');
-  return Array.isArray(data) ? data : [];
+  return data || [];
 };
 
 export const saveOrderToDB = async (order: Order) => {
@@ -113,7 +99,7 @@ export const updateOrderStatusInDB = async (id: string, status: string) => {
   });
 };
 
-// Local storage settings
+// Налаштування сайту (залишаємо в LocalStorage для швидкості, або теж можна в БД)
 export const getStoredLogo = () => localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
 export const saveLogo = (logo: string) => localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
 export const getStoredShopPhone = () => localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';

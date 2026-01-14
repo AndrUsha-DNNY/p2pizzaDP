@@ -11,8 +11,7 @@ import Footer from './components/Footer.tsx';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
 import { 
   fetchPizzas, savePizzasToDB, getStoredUser, saveUser, 
-  fetchOrders, saveOrderToDB, updateOrderStatusInDB, 
-  getStoredSpecial, sendTelegramNotification
+  fetchOrders, saveOrderToDB, updateOrderStatusInDB, getStoredSpecial, sendTelegramNotification
 } from './store.ts';
 
 interface FlyingPizza {
@@ -41,22 +40,19 @@ const App: React.FC = () => {
   }, [orders]);
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const [dbPizzas, dbOrders] = await Promise.all([fetchPizzas(), fetchOrders()]);
-        setPizzas(dbPizzas);
-        setOrders(dbOrders);
-        setUser(getStoredUser());
-      } catch (error) {
-        console.error("Critical loading error:", error);
-      } finally {
-        setIsLoading(false);
-      }
+    const init = async () => {
+      setIsLoading(true);
+      const [dbPizzas, dbOrders] = await Promise.all([fetchPizzas(), fetchOrders()]);
+      setPizzas(dbPizzas);
+      setOrders(dbOrders);
+      setUser(getStoredUser());
+      setIsLoading(false);
     };
-    loadData();
+    init();
 
-    const handleStorage = () => setSiteSpecial(getStoredSpecial());
+    const handleStorage = () => {
+      setSiteSpecial(getStoredSpecial());
+    };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
@@ -95,8 +91,11 @@ const App: React.FC = () => {
       notes: orderData.notes
     };
 
+    const updatedOrders = [newOrder, ...orders];
+    setOrders(updatedOrders);
+    
+    // Зберігаємо в MongoDB
     await saveOrderToDB(newOrder);
-    setOrders([newOrder, ...orders]);
     await sendTelegramNotification(newOrder);
 
     setCartItems([]);
@@ -110,8 +109,18 @@ const App: React.FC = () => {
   };
 
   const handleUpdateStatus = async (id: string, status: OrderStatus) => {
+    const updated = orders.map(o => {
+      if (o.id === id) {
+        return { 
+          ...o, 
+          status, 
+          preparingStartTime: status === 'Готується' ? Date.now() : o.preparingStartTime 
+        };
+      }
+      return o;
+    });
+    setOrders(updated);
     await updateOrderStatusInDB(id, status);
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
   };
 
   const filteredPizzas = useMemo(() => {
@@ -123,9 +132,11 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
-        <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="font-black uppercase text-xs tracking-widest text-orange-500 animate-pulse">З'єднуємося з базою P2P...</p>
+      <div className="min-h-screen bg-[#fffaf5] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-black uppercase tracking-widest text-xs animate-pulse">P2PIZZA ЗАВАНТАЖУЄТЬСЯ...</p>
+        </div>
       </div>
     );
   }
@@ -140,7 +151,7 @@ const App: React.FC = () => {
             <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Hero" />
             <div className="relative z-10 text-center text-white px-4">
               <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter animate-in slide-in-from-bottom duration-700">{siteSpecial.title}</h1>
-              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8 font-medium">{siteSpecial.description}</p>
+              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8 font-medium animate-in slide-in-from-bottom duration-700 delay-100">{siteSpecial.description}</p>
               <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 text-white px-10 py-4 rounded-full font-black uppercase shadow-xl hover:bg-white hover:text-orange-500 transition-all active:scale-95">Замовити зараз</button>
             </div>
           </section>
@@ -178,25 +189,19 @@ const App: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {filteredPizzas.length > 0 ? (
-              filteredPizzas.map(p => (
-                <PizzaCard 
-                  key={p.id} 
-                  pizza={p} 
-                  onAddToCart={handleAddToCart} 
-                  isFavorite={user?.favorites.includes(p.id) || false} 
-                  onToggleFavorite={(id) => {
-                    if (!user) { setIsAuthOpen(true); return; }
-                    const updated = { ...user, favorites: user.favorites.includes(id) ? user.favorites.filter(f => f !== id) : [...user.favorites, id] };
-                    setUser(updated); saveUser(updated);
-                  }} 
-                />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-20">
-                <p className="text-gray-400 font-bold uppercase text-xs">Тут поки порожньо...</p>
-              </div>
-            )}
+            {filteredPizzas.map(p => (
+              <PizzaCard 
+                key={p.id} 
+                pizza={p} 
+                onAddToCart={handleAddToCart} 
+                isFavorite={user?.favorites.includes(p.id) || false} 
+                onToggleFavorite={(id) => {
+                  if (!user) { setIsAuthOpen(true); return; }
+                  const updated = { ...user, favorites: user.favorites.includes(id) ? user.favorites.filter(f => f !== id) : [...user.favorites, id] };
+                  setUser(updated); saveUser(updated);
+                }} 
+              />
+            ))}
           </div>
         )}
       </main>
@@ -212,6 +217,22 @@ const App: React.FC = () => {
           <img src={p.image} className="w-full h-full object-cover" alt="Fly" />
         </div>
       ))}
+
+      <style>{`
+        @keyframes pizzaFly {
+          0% { transform: scale(1) translate(0, 0) rotate(0deg); opacity: 1; }
+          20% { transform: scale(1.3) translate(50px, -150px) rotate(45deg); opacity: 1; }
+          100% { 
+            left: calc(100vw - 60px); 
+            top: 20px; 
+            transform: scale(0.1) translate(0, 0) rotate(720deg); 
+            opacity: 0; 
+          }
+        }
+        .animate-pizza-fly {
+          animation: pizzaFly 1s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        }
+      `}</style>
     </div>
   );
 };

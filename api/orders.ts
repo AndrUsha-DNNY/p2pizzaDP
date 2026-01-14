@@ -9,13 +9,13 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'GET') {
       const orders = await collection.find({}).sort({ _id: -1 }).toArray();
-      return res.status(200).json(orders || []);
+      return res.status(200).json(orders);
     }
 
     if (req.method === 'POST') {
       const order = req.body;
-      const result = await collection.insertOne(order);
-      return res.status(201).json({ ...order, _id: result.insertedId });
+      await collection.insertOne(order);
+      return res.status(200).json({ success: true });
     }
 
     if (req.method === 'PATCH') {
@@ -25,8 +25,7 @@ export default async function handler(req: any, res: any) {
     }
 
     return res.status(405).json({ message: 'Method not allowed' });
-  } catch (error: any) {
-    console.error('API Orders Error:', error);
-    return res.status(500).json({ error: 'Failed to process order', details: error.message });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
   }
 }

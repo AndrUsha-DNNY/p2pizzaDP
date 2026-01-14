@@ -12,6 +12,7 @@ let client;
 let clientPromise: Promise<MongoClient>;
 
 if (process.env.NODE_ENV === 'development') {
+  // У режимі розробки використовуємо глобальну змінну, щоб не переповнювати пул з'єднань
   let globalWithMongo = global as typeof globalThis & {
     _mongoClientPromise?: Promise<MongoClient>;
   };
@@ -22,6 +23,7 @@ if (process.env.NODE_ENV === 'development') {
   }
   clientPromise = globalWithMongo._mongoClientPromise;
 } else {
+  // У продакшені створюємо нове з'єднання
   client = new MongoClient(uri, options);
   clientPromise = client.connect();
 }
