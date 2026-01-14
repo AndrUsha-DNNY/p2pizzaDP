@@ -11,8 +11,7 @@ import Footer from './components/Footer.tsx';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
 import { 
   getStoredPizzas, savePizzas, getStoredUser, saveUser, 
-  getStoredOrders, saveOrders, getStoredSpecial, sendTelegramNotification,
-  getSupabaseConfig, getSupabaseHeaders
+  getStoredOrders, saveOrders, getStoredSpecial, sendTelegramNotification
 } from './store.ts';
 
 interface FlyingPizza {
@@ -39,33 +38,10 @@ const App: React.FC = () => {
     return orders.find(o => o.status === 'Готується' || o.status === 'Готово');
   }, [orders]);
 
-  const syncWithCloud = async () => {
-    const { url } = getSupabaseConfig();
-    if (!url) return;
-    try {
-      const headers = getSupabaseHeaders();
-      const [pRes, oRes] = await Promise.all([
-        fetch(`${url}/rest/v1/pizzas?select=*`, { headers }),
-        fetch(`${url}/rest/v1/orders?select=*&order=created_at.desc`, { headers })
-      ]);
-      if (pRes.ok) {
-        const cloudPizzas = await pRes.json();
-        if (cloudPizzas.length > 0) { setPizzas(cloudPizzas); savePizzas(cloudPizzas); }
-      }
-      if (oRes.ok) {
-        const cloudOrders = await oRes.json();
-        setOrders(cloudOrders); saveOrders(cloudOrders);
-      }
-    } catch (e) { console.error("Sync error", e); }
-  };
-
   useEffect(() => {
     setPizzas(getStoredPizzas());
     setUser(getStoredUser());
     setOrders(getStoredOrders());
-    syncWithCloud();
-    const interval = setInterval(syncWithCloud, 60000); // Синхронізація кожну хвилину
-    return () => clearInterval(interval);
   }, []);
 
   const handleAddToCart = (pizza: Pizza, rect: DOMRect) => {
@@ -106,15 +82,6 @@ const App: React.FC = () => {
     setOrders(updatedOrders);
     saveOrders(updatedOrders);
 
-    const { url } = getSupabaseConfig();
-    if (url) {
-      fetch(`${url}/rest/v1/orders`, {
-        method: 'POST',
-        headers: getSupabaseHeaders(),
-        body: JSON.stringify({ ...newOrder, created_at: new Date().toISOString() })
-      });
-    }
-
     await sendTelegramNotification(newOrder);
 
     setCartItems([]);
@@ -125,14 +92,6 @@ const App: React.FC = () => {
   const handleUpdatePizzas = (newPizzas: Pizza[]) => {
     setPizzas([...newPizzas]);
     savePizzas([...newPizzas]);
-    const { url } = getSupabaseConfig();
-    if (url) {
-      fetch(`${url}/rest/v1/pizzas`, {
-        method: 'POST',
-        headers: { ...getSupabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
-        body: JSON.stringify(newPizzas)
-      });
-    }
   };
 
   const handleUpdateStatus = (id: string, status: OrderStatus) => {
@@ -148,15 +107,6 @@ const App: React.FC = () => {
     });
     setOrders(updated);
     saveOrders(updated);
-
-    const { url } = getSupabaseConfig();
-    if (url) {
-      fetch(`${url}/rest/v1/orders?id=eq.${id}`, {
-        method: 'PATCH',
-        headers: getSupabaseHeaders(),
-        body: JSON.stringify({ status })
-      });
-    }
   };
 
   const filteredPizzas = useMemo(() => {
@@ -199,12 +149,12 @@ const App: React.FC = () => {
         
         {currentView === 'history' ? (
           <div className="space-y-4 max-w-2xl mx-auto">
-            {orders.length === 0 ? <p className="text-center text-gray-400 py-20 font-bold">Замовлень ще не було</p> : 
+            {orders.length === 0 ? <p className="text-center text-gray-400 py-20 font-bold uppercase text-[10px]">Замовлень ще не було</p> : 
               orders.map(o => (
-                <div key={o.id} className="bg-white p-6 rounded-3xl border border-orange-50 shadow-sm flex justify-between items-center">
+                <div key={o.id} className="bg-white p-6 rounded-3xl border border-orange-50 shadow-sm flex justify-between items-center hover:shadow-md transition-shadow">
                   <div>
-                    <p className="font-black text-xs text-gray-400 mb-1">{o.id} • {o.date}</p>
-                    <p className="font-bold">{o.items.map(i => i.name).join(', ')}</p>
+                    <p className="font-black text-[9px] text-gray-400 mb-1 uppercase">{o.id} • {o.date}</p>
+                    <p className="font-bold text-sm">{o.items.map(i => i.name).join(', ')}</p>
                     <p className={`text-[10px] font-black uppercase mt-1 ${o.status === 'Скасовано' ? 'text-red-500' : 'text-orange-500'}`}>{o.status}</p>
                   </div>
                   <p className="font-black text-xl">{o.total} грн</p>

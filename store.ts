@@ -17,6 +17,17 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
+export const getTelegramConfig = () => ({
+  token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
+  chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
+});
+
+export const saveTelegramConfig = (token: string, chatId: string) => {
+  localStorage.setItem(STORAGE_KEYS.TG_TOKEN, token);
+  localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
+};
+
+// Added Supabase configuration helpers to resolve import errors in AdminPanel.tsx
 export const getSupabaseConfig = () => ({
   url: localStorage.getItem(STORAGE_KEYS.SB_URL) || '',
   key: localStorage.getItem(STORAGE_KEYS.SB_KEY) || '',
@@ -32,31 +43,21 @@ export const getSupabaseHeaders = () => {
   return {
     'apikey': key,
     'Authorization': `Bearer ${key}`,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation'
+    'Content-Type': 'application/json'
   };
-};
-
-export const getTelegramConfig = () => ({
-  token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
-  chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
-});
-
-export const saveTelegramConfig = (token: string, chatId: string) => {
-  localStorage.setItem(STORAGE_KEYS.TG_TOKEN, token);
-  localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
 };
 
 export const setupWebhook = async () => {
   const { token } = getTelegramConfig();
-  const webhookUrl = `${window.location.origin}/api/webhook`;
-  if (!token) return alert('Спочатку вкажіть токен бота!');
+  if (!token) return alert('Вкажіть токен бота в налаштуваннях!');
+  
+  const webhookUrl = `${window.location.origin}/api/webhook?token=${token}`;
   
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
     const data = await res.json();
-    if (data.ok) alert('Webhook успішно налаштовано!');
-    else alert('Помилка: ' + data.description);
+    if (data.ok) alert('Telegram Webhook активовано!');
+    else alert('Помилка Telegram: ' + data.description);
   } catch (e) {
     alert('Не вдалося підключитися до Telegram API');
   }
