@@ -5,7 +5,7 @@ import MobileNav from './components/MobileNav.tsx';
 import PizzaCard from './components/PizzaCard.tsx';
 import Cart from './components/Cart.tsx';
 import Auth from './components/Auth.tsx';
-import AdminPanel from './components/AdminPanel.tsx';
+import AdminPanel from './AdminPanel.tsx';
 import CookingTracker from './components/CookingTracker.tsx';
 import Footer from './components/Footer.tsx';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
@@ -30,7 +30,7 @@ const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [flyingPizzas, setFlyingPizzas] = useState<FlyingPizza[]>([]);
-  const [siteSpecial] = useState<SiteSpecial>(getStoredSpecial());
+  const [siteSpecial, setSiteSpecial] = useState<SiteSpecial>(getStoredSpecial());
 
   const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
 
@@ -42,6 +42,12 @@ const App: React.FC = () => {
     setPizzas(getStoredPizzas());
     setUser(getStoredUser());
     setOrders(getStoredOrders());
+
+    const handleStorage = () => {
+      setSiteSpecial(getStoredSpecial());
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const handleAddToCart = (pizza: Pizza, rect: DOMRect) => {
@@ -125,9 +131,9 @@ const App: React.FC = () => {
           <section className="relative h-[60vh] flex items-center justify-center overflow-hidden">
             <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Hero" />
             <div className="relative z-10 text-center text-white px-4">
-              <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter">{siteSpecial.title}</h1>
-              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8">{siteSpecial.description}</p>
-              <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 text-white px-10 py-4 rounded-full font-black uppercase shadow-xl hover:bg-white hover:text-orange-500 transition-all">Замовити зараз</button>
+              <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter animate-in slide-in-from-bottom duration-700">{siteSpecial.title}</h1>
+              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8 font-medium animate-in slide-in-from-bottom duration-700 delay-100">{siteSpecial.description}</p>
+              <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 text-white px-10 py-4 rounded-full font-black uppercase shadow-xl hover:bg-white hover:text-orange-500 transition-all active:scale-95">Замовити зараз</button>
             </div>
           </section>
 

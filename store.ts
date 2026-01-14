@@ -11,8 +11,6 @@ const STORAGE_KEYS = {
   SHOP_PHONE: 'p2pizza_shop_phone',
   TG_TOKEN: 'p2pizza_tg_token',
   TG_CHAT_ID: 'p2pizza_tg_chat_id',
-  SB_URL: 'p2pizza_sb_url',
-  SB_KEY: 'p2pizza_sb_key',
 };
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
@@ -27,39 +25,32 @@ export const saveTelegramConfig = (token: string, chatId: string) => {
   localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
 };
 
-// Added Supabase configuration helpers to resolve import errors in AdminPanel.tsx
-export const getSupabaseConfig = () => ({
-  url: localStorage.getItem(STORAGE_KEYS.SB_URL) || '',
-  key: localStorage.getItem(STORAGE_KEYS.SB_KEY) || '',
-});
-
-export const saveSupabaseConfig = (url: string, key: string) => {
-  localStorage.setItem(STORAGE_KEYS.SB_URL, url);
-  localStorage.setItem(STORAGE_KEYS.SB_KEY, key);
-};
-
-export const getSupabaseHeaders = () => {
-  const { key } = getSupabaseConfig();
-  return {
-    'apikey': key,
-    'Authorization': `Bearer ${key}`,
-    'Content-Type': 'application/json'
-  };
-};
-
+// Added setupWebhook to fix the error in components/AdminPanel.tsx
 export const setupWebhook = async () => {
   const { token } = getTelegramConfig();
-  if (!token) return alert('Вкажіть токен бота в налаштуваннях!');
-  
+  if (!token) {
+    alert('Будь ласка, спочатку введіть Token бота!');
+    return;
+  }
+
+  // Webhook is processed by the /api/webhook handler
   const webhookUrl = `${window.location.origin}/api/webhook?token=${token}`;
   
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
-    const data = await res.json();
-    if (data.ok) alert('Telegram Webhook активовано!');
-    else alert('Помилка Telegram: ' + data.description);
-  } catch (e) {
-    alert('Не вдалося підключитися до Telegram API');
+    const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: webhookUrl })
+    });
+    const result = await response.json();
+    if (result.ok) {
+      alert('Webhook активовано! Тепер ви можете керувати замовленнями через кнопки в Telegram.');
+    } else {
+      alert('Помилка Telegram API: ' + result.description);
+    }
+  } catch (err) {
+    console.error('Webhook setup error:', err);
+    alert('Помилка мережі при спробі активувати Webhook');
   }
 };
 
@@ -87,14 +78,15 @@ ${order.notes ? `📝 <b>КОМЕНТАР:</b> ${order.notes}` : ''}
 ⏰ <b>Час:</b> ${order.date}
   `;
 
-  const keyboard = {
+  // Define buttons for status management in Telegram
+  const reply_markup = {
     inline_keyboard: [
       [
-        { text: '🔥 Готується', callback_data: `status_prep_${order.id}` },
-        { text: '✅ Готово', callback_data: `status_ready_${order.id}` }
+        { text: '👨‍🍳 Готується', callback_data: `status_prep_${order.id}` },
+        { text: '🍕 Готово', callback_data: `status_ready_${order.id}` }
       ],
       [
-        { text: '🏁 Виконано', callback_data: `status_comp_${order.id}` },
+        { text: '✅ Виконано', callback_data: `status_comp_${order.id}` },
         { text: '❌ Скасувати', callback_data: `status_canc_${order.id}` }
       ]
     ]
@@ -108,7 +100,7 @@ ${order.notes ? `📝 <b>КОМЕНТАР:</b> ${order.notes}` : ''}
         chat_id: chatId, 
         text, 
         parse_mode: 'HTML',
-        reply_markup: keyboard 
+        reply_markup
       })
     });
   } catch (e) {
