@@ -44,13 +44,12 @@ const App: React.FC = () => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        // fetchPizzas and fetchOrders now have internal try-catches and return defaults on fail
         const [dbPizzas, dbOrders] = await Promise.all([fetchPizzas(), fetchOrders()]);
         setPizzas(dbPizzas);
         setOrders(dbOrders);
         setUser(getStoredUser());
       } catch (error) {
-        console.error("Initial load failed", error);
+        console.error("Critical load error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -126,7 +125,7 @@ const App: React.FC = () => {
     return (
       <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
         <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="font-black uppercase text-xs tracking-widest text-orange-500 animate-pulse">З'єднуємо з базою...</p>
+        <p className="font-black uppercase text-xs tracking-widest text-orange-500 animate-pulse">З'єднуємо з базою P2P...</p>
       </div>
     );
   }
@@ -194,7 +193,9 @@ const App: React.FC = () => {
                 />
               ))
             ) : (
-              <p className="col-span-full text-center py-20 text-gray-400 font-bold uppercase text-xs">Тут поки порожньо...</p>
+              <div className="col-span-full text-center py-20">
+                <p className="text-gray-400 font-bold uppercase text-xs">Тут поки нічого немає...</p>
+              </div>
             )}
           </div>
         )}

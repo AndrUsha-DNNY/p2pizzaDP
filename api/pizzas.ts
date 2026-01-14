@@ -14,7 +14,9 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'POST') {
       const { pizzas } = req.body;
-      if (!Array.isArray(pizzas)) return res.status(400).json({ error: 'Invalid data format' });
+      if (!Array.isArray(pizzas)) {
+        return res.status(400).json({ error: 'Invalid data' });
+      }
       await collection.deleteMany({});
       if (pizzas.length > 0) {
         await collection.insertMany(pizzas);
@@ -24,7 +26,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ message: 'Method not allowed' });
   } catch (error: any) {
-    console.error('API Pizzas Error:', error);
-    return res.status(500).json({ error: 'Database connection failed', details: error.message });
+    console.error('MongoDB Error:', error);
+    return res.status(500).json({ error: 'Database error', details: error.message });
   }
 }

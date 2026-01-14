@@ -26,7 +26,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ message: 'Method not allowed' });
   } catch (error: any) {
-    console.error('API Orders Error:', error);
-    return res.status(500).json({ error: 'Database connection failed', details: error.message });
+    console.error('MongoDB Error:', error);
+    return res.status(500).json({ error: 'Database error', details: error.message });
   }
 }

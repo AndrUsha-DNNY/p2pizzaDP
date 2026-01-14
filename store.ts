@@ -47,29 +47,32 @@ export const sendTelegramNotification = async (order: Order) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
     });
-  } catch (e) { console.error('TG notify error', e); }
+  } catch (e) { console.error('TG notification failed', e); }
 };
 
-// --- MongoDB API Calls with Improved Error Handling ---
+// --- MongoDB API Calls with protection ---
 
 const safeFetch = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
     if (!res.ok) {
-      const errorText = await res.text();
-      console.warn(`API error at ${url}: ${res.status}`, errorText);
+      console.error(`Fetch error: ${res.status} ${res.statusText}`);
       return null;
     }
-    return await res.json();
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+      return await res.json();
+    }
+    return null;
   } catch (e) {
-    console.error(`Fetch failed at ${url}:`, e);
+    console.error(`Fetch failed for ${url}:`, e);
     return null;
   }
 };
 
 export const fetchPizzas = async (): Promise<Pizza[]> => {
   const data = await safeFetch('/api/pizzas');
-  return data && Array.isArray(data) && data.length > 0 ? data : INITIAL_PIZZAS;
+  return (data && Array.isArray(data) && data.length > 0) ? data : INITIAL_PIZZAS;
 };
 
 export const savePizzasToDB = async (pizzas: Pizza[]) => {
@@ -101,7 +104,6 @@ export const updateOrderStatusInDB = async (id: string, status: string) => {
   });
 };
 
-// Local storage settings
 export const getStoredLogo = () => localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
 export const saveLogo = (logo: string) => localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
 export const getStoredShopPhone = () => localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';
