@@ -3,9 +3,7 @@ import { Pizza, Order, User, SiteSpecial } from './types';
 import { INITIAL_PIZZAS } from './constants';
 
 const STORAGE_KEYS = {
-  PIZZAS: 'p2pizza_pizzas',
   USER: 'p2pizza_user',
-  ORDERS: 'p2pizza_orders',
   SITE_LOGO: 'p2pizza_site_logo',
   SITE_SPECIAL: 'p2pizza_site_special',
   SHOP_PHONE: 'p2pizza_shop_phone',
@@ -15,6 +13,7 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
+// Telegram config (все ще тримаємо в локалці для зручності адміна)
 export const getTelegramConfig = () => ({
   token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
   chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
@@ -25,33 +24,15 @@ export const saveTelegramConfig = (token: string, chatId: string) => {
   localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
 };
 
-// Added setupWebhook to fix the error in components/AdminPanel.tsx
 export const setupWebhook = async () => {
   const { token } = getTelegramConfig();
-  if (!token) {
-    alert('Будь ласка, спочатку введіть Token бота!');
-    return;
-  }
-
-  // Webhook is processed by the /api/webhook handler
+  if (!token) return alert('Введіть токен!');
   const webhookUrl = `${window.location.origin}/api/webhook?token=${token}`;
-  
   try {
-    const response = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: webhookUrl })
-    });
-    const result = await response.json();
-    if (result.ok) {
-      alert('Webhook активовано! Тепер ви можете керувати замовленнями через кнопки в Telegram.');
-    } else {
-      alert('Помилка Telegram API: ' + result.description);
-    }
-  } catch (err) {
-    console.error('Webhook setup error:', err);
-    alert('Помилка мережі при спробі активувати Webhook');
-  }
+    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${webhookUrl}`);
+    const data = await res.json();
+    alert(data.ok ? 'Webhook активний!' : 'Помилка: ' + data.description);
+  } catch (e) { alert('Помилка з’єднання'); }
 };
 
 export const sendTelegramNotification = async (order: Order) => {
@@ -59,89 +40,59 @@ export const sendTelegramNotification = async (order: Order) => {
   if (!token || !chatId) return;
 
   const items = order.items.map(i => `• ${i.name} (x${i.quantity})`).join('\n');
-  const typeLabel = order.type === 'delivery' ? '🚚 Доставка' : '🏢 Самовивіз';
-  const paymentLabel = order.paymentMethod === 'cash' ? '💵 Готівка' : '💳 Карта при отриманні';
-  
-  const text = `
-🔔 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>
----------------------------
-🍕 <b>ТОВАРИ:</b>
-${items}
+  const text = `🔔 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>\n💰 <b>СУМА: ${order.total} грн</b>\n📞 <b>ТЕЛ:</b> ${order.phone}\n🍕 <b>ТОВАРИ:</b>\n${items}`;
 
-💰 <b>РАЗОМ: ${order.total} грн</b>
-💳 <b>ОПЛАТА:</b> ${paymentLabel}
-📍 <b>ТИП:</b> ${typeLabel} ${order.pickupTime ? `на ${order.pickupTime}` : ''}
-📞 <b>ТЕЛ:</b> <code>${order.phone}</code>
-${order.address ? `🏠 <b>АДРЕСА:</b> ${order.address}, буд. ${order.houseNumber}` : ''}
-${order.notes ? `📝 <b>КОМЕНТАР:</b> ${order.notes}` : ''}
----------------------------
-⏰ <b>Час:</b> ${order.date}
-  `;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+  });
+};
 
-  // Define buttons for status management in Telegram
-  const reply_markup = {
-    inline_keyboard: [
-      [
-        { text: '👨‍🍳 Готується', callback_data: `status_prep_${order.id}` },
-        { text: '🍕 Готово', callback_data: `status_ready_${order.id}` }
-      ],
-      [
-        { text: '✅ Виконано', callback_data: `status_comp_${order.id}` },
-        { text: '❌ Скасувати', callback_data: `status_canc_${order.id}` }
-      ]
-    ]
-  };
+// --- MongoDB API Calls ---
 
+export const fetchPizzas = async (): Promise<Pizza[]> => {
   try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        chat_id: chatId, 
-        text, 
-        parse_mode: 'HTML',
-        reply_markup
-      })
-    });
-  } catch (e) {
-    console.error('Telegram error:', e);
-  }
+    const res = await fetch('/api/pizzas');
+    const data = await res.json();
+    return data.length > 0 ? data : INITIAL_PIZZAS;
+  } catch (e) { return INITIAL_PIZZAS; }
 };
 
-export const getStoredPizzas = (): Pizza[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.PIZZAS);
-  return data ? JSON.parse(data) : INITIAL_PIZZAS;
+export const savePizzasToDB = async (pizzas: Pizza[]) => {
+  await fetch('/api/pizzas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pizzas })
+  });
 };
 
-export const savePizzas = (pizzas: Pizza[]) => {
-  localStorage.setItem(STORAGE_KEYS.PIZZAS, JSON.stringify(pizzas));
+export const fetchOrders = async (): Promise<Order[]> => {
+  const res = await fetch('/api/orders');
+  return res.json();
 };
 
-export const getStoredOrders = (): Order[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.ORDERS);
-  return data ? JSON.parse(data) : [];
+export const saveOrderToDB = async (order: Order) => {
+  await fetch('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(order)
+  });
 };
 
-export const saveOrders = (orders: Order[]) => {
-  localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+export const updateOrderStatusInDB = async (id: string, status: string) => {
+  await fetch('/api/orders', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, status })
+  });
 };
 
-export const getStoredLogo = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
-};
-
-export const saveLogo = (logo: string) => {
-  localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
-};
-
-export const getStoredShopPhone = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';
-};
-
-export const saveShopPhone = (phone: string) => {
-  localStorage.setItem(STORAGE_KEYS.SHOP_PHONE, phone);
-};
-
+// Решта налаштувань поки залишаємо в локалці для швидкості завантаження інтерфейсу
+export const getStoredLogo = () => localStorage.getItem(STORAGE_KEYS.SITE_LOGO) || DEFAULT_LOGO;
+export const saveLogo = (logo: string) => localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
+export const getStoredShopPhone = () => localStorage.getItem(STORAGE_KEYS.SHOP_PHONE) || '+380 63 700 69 69';
+export const saveShopPhone = (phone: string) => localStorage.setItem(STORAGE_KEYS.SHOP_PHONE, phone);
 export const getStoredSpecial = (): SiteSpecial => {
   const data = localStorage.getItem(STORAGE_KEYS.SITE_SPECIAL);
   return data ? JSON.parse(data) : {
@@ -151,22 +102,13 @@ export const getStoredSpecial = (): SiteSpecial => {
     badge: 'P2PIZZA SPECIAL'
   };
 };
-
-export const saveSpecial = (special: SiteSpecial) => {
-  localStorage.setItem(STORAGE_KEYS.SITE_SPECIAL, JSON.stringify(special));
-};
-
+export const saveSpecial = (special: SiteSpecial) => localStorage.setItem(STORAGE_KEYS.SITE_SPECIAL, JSON.stringify(special));
 export const getStoredUser = () => {
   const data = localStorage.getItem(STORAGE_KEYS.USER);
   return data ? JSON.parse(data) : null;
 };
-
-export const saveUser = (user: any) => {
-  if (user) localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-  else localStorage.removeItem(STORAGE_KEYS.USER);
-};
-
-export const getAdminPassword = () => localStorage.getItem('p2pizza_admin_password') || 'admin123';
+export const saveUser = (user: any) => user ? localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user)) : localStorage.removeItem(STORAGE_KEYS.USER);
+export const getAdminPassword = () => 'admin123';
 export const getRegisteredUsers = () => JSON.parse(localStorage.getItem('p2pizza_reg_users') || '[]');
 export const registerNewUser = (user: any) => {
   const users = getRegisteredUsers();

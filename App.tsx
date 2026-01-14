@@ -10,8 +10,9 @@ import CookingTracker from './components/CookingTracker.tsx';
 import Footer from './components/Footer.tsx';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
 import { 
-  getStoredPizzas, savePizzas, getStoredUser, saveUser, 
-  getStoredOrders, saveOrders, getStoredSpecial, sendTelegramNotification
+  fetchPizzas, savePizzasToDB, getStoredUser, saveUser, 
+  fetchOrders, saveOrderToDB, updateOrderStatusInDB, 
+  getStoredSpecial, sendTelegramNotification
 } from './store.ts';
 
 interface FlyingPizza {
@@ -29,6 +30,7 @@ const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [flyingPizzas, setFlyingPizzas] = useState<FlyingPizza[]>([]);
   const [siteSpecial, setSiteSpecial] = useState<SiteSpecial>(getStoredSpecial());
 
@@ -39,13 +41,17 @@ const App: React.FC = () => {
   }, [orders]);
 
   useEffect(() => {
-    setPizzas(getStoredPizzas());
-    setUser(getStoredUser());
-    setOrders(getStoredOrders());
-
-    const handleStorage = () => {
-      setSiteSpecial(getStoredSpecial());
+    const loadData = async () => {
+      setIsLoading(true);
+      const [dbPizzas, dbOrders] = await Promise.all([fetchPizzas(), fetchOrders()]);
+      setPizzas(dbPizzas);
+      setOrders(dbOrders);
+      setUser(getStoredUser());
+      setIsLoading(false);
     };
+    loadData();
+
+    const handleStorage = () => setSiteSpecial(getStoredSpecial());
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
@@ -84,10 +90,8 @@ const App: React.FC = () => {
       notes: orderData.notes
     };
 
-    const updatedOrders = [newOrder, ...orders];
-    setOrders(updatedOrders);
-    saveOrders(updatedOrders);
-
+    await saveOrderToDB(newOrder);
+    setOrders([newOrder, ...orders]);
     await sendTelegramNotification(newOrder);
 
     setCartItems([]);
@@ -95,24 +99,14 @@ const App: React.FC = () => {
     setCurrentView('history');
   };
 
-  const handleUpdatePizzas = (newPizzas: Pizza[]) => {
+  const handleUpdatePizzas = async (newPizzas: Pizza[]) => {
     setPizzas([...newPizzas]);
-    savePizzas([...newPizzas]);
+    await savePizzasToDB(newPizzas);
   };
 
-  const handleUpdateStatus = (id: string, status: OrderStatus) => {
-    const updated = orders.map(o => {
-      if (o.id === id) {
-        return { 
-          ...o, 
-          status, 
-          preparingStartTime: status === 'Готується' ? Date.now() : o.preparingStartTime 
-        };
-      }
-      return o;
-    });
-    setOrders(updated);
-    saveOrders(updated);
+  const handleUpdateStatus = async (id: string, status: OrderStatus) => {
+    await updateOrderStatusInDB(id, status);
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
   };
 
   const filteredPizzas = useMemo(() => {
@@ -121,6 +115,15 @@ const App: React.FC = () => {
     if (currentView === 'favorites') return pizzas.filter(p => user?.favorites.includes(p.id));
     return pizzas.filter(p => p.category === 'pizza');
   }, [currentView, pizzas, user]);
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
+        <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="font-black uppercase text-xs tracking-widest text-orange-500">Завантажуємо меню...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-32 md:pb-12 relative bg-[#fffaf5] text-black">
@@ -132,7 +135,7 @@ const App: React.FC = () => {
             <img src={siteSpecial.image} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Hero" />
             <div className="relative z-10 text-center text-white px-4">
               <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter animate-in slide-in-from-bottom duration-700">{siteSpecial.title}</h1>
-              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8 font-medium animate-in slide-in-from-bottom duration-700 delay-100">{siteSpecial.description}</p>
+              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8 font-medium">{siteSpecial.description}</p>
               <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 text-white px-10 py-4 rounded-full font-black uppercase shadow-xl hover:bg-white hover:text-orange-500 transition-all active:scale-95">Замовити зараз</button>
             </div>
           </section>
@@ -198,22 +201,6 @@ const App: React.FC = () => {
           <img src={p.image} className="w-full h-full object-cover" alt="Fly" />
         </div>
       ))}
-
-      <style>{`
-        @keyframes pizzaFly {
-          0% { transform: scale(1) translate(0, 0) rotate(0deg); opacity: 1; }
-          20% { transform: scale(1.3) translate(50px, -150px) rotate(45deg); opacity: 1; }
-          100% { 
-            left: calc(100vw - 60px); 
-            top: 20px; 
-            transform: scale(0.1) translate(0, 0) rotate(720deg); 
-            opacity: 0; 
-          }
-        }
-        .animate-pizza-fly {
-          animation: pizzaFly 1s cubic-bezier(0.19, 1, 0.22, 1) forwards;
-        }
-      `}</style>
     </div>
   );
 };
