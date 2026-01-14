@@ -18,7 +18,6 @@ const STORAGE_KEYS = {
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
-// Налаштування хмари
 export const getSupabaseConfig = () => ({
   url: localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || '',
   key: localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || '',
@@ -39,7 +38,6 @@ export const getSupabaseHeaders = () => {
   };
 };
 
-// Telegram логіка
 export const getTelegramConfig = () => ({
   token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
   chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
@@ -54,20 +52,26 @@ export const sendTelegramNotification = async (order: Order) => {
   const { token, chatId } = getTelegramConfig();
   if (!token || !chatId) return;
 
-  const items = order.items.map(i => `🍕 ${i.name} x${i.quantity}`).join('\n');
+  const items = order.items.map(i => `• ${i.name} (x${i.quantity})`).join('\n');
+  const typeLabel = order.type === 'delivery' ? '🚚 Доставка' : '🏢 Самовивіз';
+  const paymentLabel = order.paymentMethod === 'cash' ? '💵 Готівка' : '💳 Карта при отриманні';
+  
+  // Виправлено: беремо телефон прямо з об'єкта замовлення
   const text = `
-🆕 <b>НОВЕ ЗАМОВЛЕННЯ!</b>
+🔔 <b>НОВЕ ЗАМОВЛЕННЯ ${order.id}</b>
 ---------------------------
-<b>ID:</b> ${order.id}
-<b>Клієнт:</b> ${order.phone}
-<b>Оплата:</b> ${order.paymentMethod === 'cash' ? 'Готівка' : 'Карта'}
-<b>Тип:</b> ${order.type === 'delivery' ? 'Доставка' : 'Самовивіз'}
-${order.address ? `<b>Адреса:</b> ${order.address}, ${order.houseNumber}` : ''}
----------------------------
-<b>Склад:</b>
+🍕 <b>ТОВАРИ:</b>
 ${items}
+
+💰 <b>РАЗОМ: ${order.total} грн</b>
+💳 <b>ОПЛАТА:</b> ${paymentLabel}
+📍 <b>ТИП:</b> ${typeLabel} ${order.pickupTime ? `на ${order.pickupTime}` : ''}
+📞 <b>ТЕЛ:</b> <code>${order.phone || 'Не вказано'}</code>
+${order.address ? `🏠 <b>АДРЕСА:</b> ${order.address}, буд. ${order.houseNumber}` : ''}
+
+📝 <b>КОМЕНТАР:</b> ${order.notes || 'відсутній'}
 ---------------------------
-💰 <b>СУМА: ${order.total} грн</b>
+⏰ <b>Час:</b> ${new Date().toLocaleString('uk-UA')}
   `;
 
   try {
@@ -81,7 +85,6 @@ ${items}
   }
 };
 
-// Меню та інше
 export const getStoredPizzas = (): Pizza[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PIZZAS);
   return data ? JSON.parse(data) : INITIAL_PIZZAS;
