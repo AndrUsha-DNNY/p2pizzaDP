@@ -16,7 +16,11 @@ export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 const safeFetch = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`API Error (${res.status}): ${errorText}`);
+      return null;
+    }
     const contentType = res.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       return await res.json();
@@ -69,19 +73,17 @@ export const sendTelegramNotification = async (order: Order) => {
 
 export const fetchPizzas = async (): Promise<Pizza[]> => {
   const data = await safeFetch('/api/pizzas');
-  // Якщо ми отримали масив від API, використовуємо його. 
-  // Тільки якщо API повернуло помилку (null) або абсолютно порожню базу на першому етапі, 
-  // ми показуємо початкові дані.
-  if (Array.isArray(data) && data.length > 0) {
-    return data;
+  // Якщо API повернуло null (помилка), використовуємо константи.
+  // Якщо API повернуло порожній масив [], значить в базі дійсно нічого немає, 
+  // але при першому запуску (коли база ще не ініціалізована) зазвичай хочеться бачити INITIAL_PIZZAS.
+  if (Array.isArray(data)) {
+    return data.length > 0 ? data : INITIAL_PIZZAS;
   }
   return INITIAL_PIZZAS;
 };
 
 export const savePizzasToDB = async (pizzas: Pizza[]) => {
-  // Перед відправкою на сервер також видаляємо _id, якщо вони є у фронтенд-стейті
   const sanitizedPizzas = pizzas.map(({ _id, ...rest }: any) => rest);
-  
   const result = await safeFetch('/api/pizzas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

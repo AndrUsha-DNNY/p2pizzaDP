@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { 
   getStoredShopPhone, saveShopPhone, getTelegramConfig, 
-  saveTelegramConfig, getStoredLogo, saveLogo, getStoredSpecial, saveSpecial, savePizzasToDB
+  saveTelegramConfig, getStoredLogo, saveLogo, getStoredSpecial, saveSpecial
 } from './store';
 
 interface AdminPanelProps {
@@ -69,15 +69,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
       updatedPizzas = pizzas.map(p => p.id === editingId ? { ...p, ...editForm } as Pizza : p);
     }
     
+    // Викликаємо тільки onUpdatePizzas (вона вже викликає savePizzasToDB в App.tsx)
     onUpdatePizzas(updatedPizzas);
-    const success = await savePizzasToDB(updatedPizzas);
     
-    if (success) {
-      setStatusMessage('Меню оновлено в базі даних!');
-    } else {
-      setStatusMessage('Помилка збереження в БД!');
-    }
-    
+    setStatusMessage('Зміни в меню застосовано');
     setTimeout(() => setStatusMessage(null), 3000);
     setEditingId(null);
   };
@@ -86,7 +81,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
     if (confirm('Видалити цей товар?')) {
       const updated = pizzas.filter(x => x.id !== id);
       onUpdatePizzas(updated);
-      await savePizzasToDB(updated);
       setStatusMessage('Товар видалено');
       setTimeout(() => setStatusMessage(null), 3000);
     }
