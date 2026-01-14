@@ -49,7 +49,7 @@ const App: React.FC = () => {
         setOrders(dbOrders);
         setUser(getStoredUser());
       } catch (error) {
-        console.error("Critical load error:", error);
+        console.error("Critical loading error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -125,7 +125,7 @@ const App: React.FC = () => {
     return (
       <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
         <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="font-black uppercase text-xs tracking-widest text-orange-500 animate-pulse">З'єднуємо з базою P2P...</p>
+        <p className="font-black uppercase text-xs tracking-widest text-orange-500 animate-pulse">З'єднуємося з базою P2P...</p>
       </div>
     );
   }
@@ -194,7 +194,7 @@ const App: React.FC = () => {
               ))
             ) : (
               <div className="col-span-full text-center py-20">
-                <p className="text-gray-400 font-bold uppercase text-xs">Тут поки нічого немає...</p>
+                <p className="text-gray-400 font-bold uppercase text-xs">Тут поки порожньо...</p>
               </div>
             )}
           </div>
