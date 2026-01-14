@@ -14,21 +14,11 @@ const STORAGE_KEYS = {
   TG_CHAT_ID: 'p2pizza_tg_chat_id',
   SUPABASE_URL: 'p2pizza_sb_url',
   SUPABASE_KEY: 'p2pizza_sb_key',
-  REGISTERED_USERS: 'p2pizza_registered_users',
 };
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
-// Fix: Added getAdminPassword export to resolve import error in components/Auth.tsx
-export const getAdminPassword = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || 'admin123';
-};
-
-// Fix: Added saveAdminPassword export to resolve import error in AdminPanel.tsx
-export const saveAdminPassword = (password: string) => {
-  localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, password);
-};
-
+// Налаштування хмари
 export const getSupabaseConfig = () => ({
   url: localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || '',
   key: localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) || '',
@@ -49,29 +39,49 @@ export const getSupabaseHeaders = () => {
   };
 };
 
-// Cloud Sync Helpers
-export const syncSettingsToCloud = async () => {
-  const { url } = getSupabaseConfig();
-  if (!url) return;
-  
-  const settings = [
-    { key: 'logo', value: getStoredLogo() },
-    { key: 'phone', value: getStoredShopPhone() },
-    { key: 'special', value: getStoredSpecial() },
-    { key: 'tg_config', value: getTelegramConfig() }
-  ];
+// Telegram логіка
+export const getTelegramConfig = () => ({
+  token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
+  chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
+});
+
+export const saveTelegramConfig = (token: string, chatId: string) => {
+  localStorage.setItem(STORAGE_KEYS.TG_TOKEN, token);
+  localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
+};
+
+export const sendTelegramNotification = async (order: Order) => {
+  const { token, chatId } = getTelegramConfig();
+  if (!token || !chatId) return;
+
+  const items = order.items.map(i => `🍕 ${i.name} x${i.quantity}`).join('\n');
+  const text = `
+🆕 <b>НОВЕ ЗАМОВЛЕННЯ!</b>
+---------------------------
+<b>ID:</b> ${order.id}
+<b>Клієнт:</b> ${order.phone}
+<b>Оплата:</b> ${order.paymentMethod === 'cash' ? 'Готівка' : 'Карта'}
+<b>Тип:</b> ${order.type === 'delivery' ? 'Доставка' : 'Самовивіз'}
+${order.address ? `<b>Адреса:</b> ${order.address}, ${order.houseNumber}` : ''}
+---------------------------
+<b>Склад:</b>
+${items}
+---------------------------
+💰 <b>СУМА: ${order.total} грн</b>
+  `;
 
   try {
-    await fetch(`${url}/rest/v1/site_settings`, {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
-      headers: getSupabaseHeaders(),
-      body: JSON.stringify(settings.map(s => ({ key: s.key, value: s.value })))
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
     });
   } catch (e) {
-    console.error('Cloud settings sync failed', e);
+    console.error('Telegram error:', e);
   }
 };
 
+// Меню та інше
 export const getStoredPizzas = (): Pizza[] => {
   const data = localStorage.getItem(STORAGE_KEYS.PIZZAS);
   return data ? JSON.parse(data) : INITIAL_PIZZAS;
@@ -100,16 +110,11 @@ export const saveOrders = (orders: Order[]) => {
   localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
 };
 
-export const saveOrder = (order: Order) => {
-  const orders = getStoredOrders();
-  saveOrders([order, ...orders]);
-};
-
 export const getStoredSpecial = (): SiteSpecial => {
   const data = localStorage.getItem(STORAGE_KEYS.SITE_SPECIAL);
   return data ? JSON.parse(data) : {
     title: 'СВІЖА. ГАРЯЧА. ТВОЯ.',
-    description: 'Замовляй найкращу піцу в місті з доставкою або забирай сам за 8 хвилин!',
+    description: 'Замовляй найкращу піцу в місті!',
     image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=2000',
     badge: 'P2PIZZA SPECIAL'
   };
@@ -117,16 +122,6 @@ export const getStoredSpecial = (): SiteSpecial => {
 
 export const saveSpecial = (special: SiteSpecial) => {
   localStorage.setItem(STORAGE_KEYS.SITE_SPECIAL, JSON.stringify(special));
-};
-
-export const getTelegramConfig = () => ({
-  token: localStorage.getItem(STORAGE_KEYS.TG_TOKEN) || '',
-  chatId: localStorage.getItem(STORAGE_KEYS.TG_CHAT_ID) || '',
-});
-
-export const saveTelegramConfig = (token: string, chatId: string) => {
-  localStorage.setItem(STORAGE_KEYS.TG_TOKEN, token);
-  localStorage.setItem(STORAGE_KEYS.TG_CHAT_ID, chatId);
 };
 
 export const getStoredShopPhone = (): string => {
@@ -145,13 +140,17 @@ export const saveLogo = (logo: string) => {
   localStorage.setItem(STORAGE_KEYS.SITE_LOGO, logo);
 };
 
+export const getAdminPassword = (): string => {
+  return localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || 'admin123';
+};
+
 export const getRegisteredUsers = (): any[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.REGISTERED_USERS);
+  const data = localStorage.getItem('p2pizza_reg_users');
   return data ? JSON.parse(data) : [];
 };
 
 export const registerNewUser = (user: any) => {
   const users = getRegisteredUsers();
   users.push(user);
-  localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(users));
+  localStorage.setItem('p2pizza_reg_users', JSON.stringify(users));
 };
