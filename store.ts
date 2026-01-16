@@ -14,35 +14,31 @@ export const DEFAULT_SETTINGS = {
   }
 };
 
-// Допоміжне сховище для кешування
 const localCache = {
   get: (key: string) => {
-    const data = localStorage.getItem(`p2p_cache_${key}`);
+    const data = localStorage.getItem(`p2p_v2_${key}`);
     return data ? JSON.parse(data) : null;
   },
   set: (key: string, data: any) => {
-    localStorage.setItem(`p2p_cache_${key}`, JSON.stringify(data));
+    localStorage.setItem(`p2p_v2_${key}`, JSON.stringify(data));
   }
 };
 
-const safeFetch = async (url: string, options?: RequestInit) => {
+const apiRequest = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) {
-      console.warn(`API ${url} повернув статус ${res.status}. Можливо, сервер не налаштований.`);
-      return null;
-    }
-    return await res.json();
+    if (res.status === 404) return { error: '404', data: null };
+    if (!res.ok) return { error: 'server_error', data: null };
+    return { error: null, data: await res.json() };
   } catch (err) {
-    console.error(`Помилка мережі при запиті до ${url}`);
-    return null;
+    return { error: 'network_error', data: null };
   }
 };
 
 // --- SETTINGS ---
 export const fetchSettings = async () => {
-  const data = await safeFetch('/api/settings');
-  if (data) {
+  const { error, data } = await apiRequest('/api/settings');
+  if (data && !error) {
     localCache.set('settings', data);
     return data;
   }
@@ -51,18 +47,18 @@ export const fetchSettings = async () => {
 
 export const saveSettingsToDB = async (settings: any) => {
   localCache.set('settings', settings);
-  const res = await fetch('/api/settings', {
+  const { error } = await apiRequest('/api/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings)
   });
-  return res.ok;
+  return !error;
 };
 
 // --- MENU & ORDERS ---
 export const fetchPizzas = async (): Promise<Pizza[]> => {
-  const data = await safeFetch('/api/pizzas');
-  if (data && data.length > 0) {
+  const { error, data } = await apiRequest('/api/pizzas');
+  if (data && Array.isArray(data) && data.length > 0) {
     localCache.set('pizzas', data);
     return data;
   }
@@ -71,17 +67,17 @@ export const fetchPizzas = async (): Promise<Pizza[]> => {
 
 export const savePizzasToDB = async (pizzas: Pizza[]) => {
   localCache.set('pizzas', pizzas);
-  const res = await fetch('/api/pizzas', {
+  const { error } = await apiRequest('/api/pizzas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pizzas })
   });
-  return res.ok;
+  return !error;
 };
 
 export const fetchOrders = async (): Promise<Order[]> => {
-  const data = await safeFetch('/api/orders');
-  if (data) {
+  const { error, data } = await apiRequest('/api/orders');
+  if (data && Array.isArray(data)) {
     localCache.set('orders', data);
     return data;
   }
@@ -89,28 +85,28 @@ export const fetchOrders = async (): Promise<Order[]> => {
 };
 
 export const saveOrderToDB = async (order: Order) => {
-  const orders = localCache.get('orders') || [];
-  localCache.set('orders', [order, ...orders]);
+  const current = localCache.get('orders') || [];
+  localCache.set('orders', [order, ...current]);
   
-  const res = await fetch('/api/orders', {
+  const { error } = await apiRequest('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(order)
   });
-  return res.ok;
+  return !error;
 };
 
 export const updateOrderStatusInDB = async (id: string, status: string) => {
-  const orders = localCache.get('orders') || [];
-  const updated = orders.map((o: Order) => o.id === id ? { ...o, status } : o);
+  const current = localCache.get('orders') || [];
+  const updated = current.map((o: any) => o.id === id ? { ...o, status } : o);
   localCache.set('orders', updated);
 
-  const res = await fetch('/api/orders', {
+  const { error } = await apiRequest('/api/orders', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, status })
   });
-  return res.ok;
+  return !error;
 };
 
 // --- TELEGRAM ---
@@ -154,7 +150,6 @@ export const setupWebhook = async () => {
   } catch (e) { return false; }
 };
 
-// Глобальні геттери
 export const getStoredLogo = () => localCache.get('settings')?.logo || DEFAULT_LOGO;
 export const getStoredShopPhone = () => localCache.get('settings')?.phone || '+380 00 000 00 00';
 export const getTelegramConfig = () => {
