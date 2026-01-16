@@ -11,7 +11,7 @@ import Footer from './components/Footer.tsx';
 import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
 import { 
   fetchPizzas, savePizzasToDB, getStoredUser, saveUser, 
-  fetchOrders, saveOrderToDB, updateOrderStatusInDB, fetchSettings, sendTelegramNotification
+  fetchOrders, saveOrderToDB, updateOrderStatusInDB, fetchSettings, sendTelegramNotification, DEFAULT_SETTINGS
 } from './store.ts';
 
 const App: React.FC = () => {
@@ -23,7 +23,7 @@ const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [siteSettings, setSiteSettings] = useState<any>(null);
+  const [siteSettings, setSiteSettings] = useState<any>(DEFAULT_SETTINGS);
 
   const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
 
@@ -32,10 +32,14 @@ const App: React.FC = () => {
   }, [orders]);
 
   const refreshAll = async () => {
-    const [p, o, s] = await Promise.all([fetchPizzas(), fetchOrders(), fetchSettings()]);
-    if (p) setPizzas(p);
-    if (o) setOrders(o);
-    if (s) setSiteSettings(s);
+    try {
+      const [p, o, s] = await Promise.all([fetchPizzas(), fetchOrders(), fetchSettings()]);
+      if (p) setPizzas(p);
+      if (o) setOrders(o);
+      if (s) setSiteSettings(s);
+    } catch (err) {
+      console.error("Data refresh failed", err);
+    }
   };
 
   useEffect(() => {
@@ -85,7 +89,7 @@ const App: React.FC = () => {
     refreshAll();
   };
 
-  if (isLoading || !siteSettings) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#fffaf5] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -110,10 +114,10 @@ const App: React.FC = () => {
       {currentView === 'home' && (
         <>
           <section className="relative h-[60vh] flex items-center justify-center overflow-hidden">
-            <img src={siteSettings.special.image} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Hero" />
+            <img src={siteSettings.special?.image || DEFAULT_SETTINGS.special.image} className="absolute inset-0 w-full h-full object-cover brightness-50" alt="Hero" />
             <div className="relative z-10 text-center text-white px-4">
-              <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter">{siteSettings.special.title}</h1>
-              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8 font-medium">{siteSettings.special.description}</p>
+              <h1 className="text-4xl md:text-7xl font-black uppercase mb-4 tracking-tighter">{siteSettings.special?.title || DEFAULT_SETTINGS.special.title}</h1>
+              <p className="text-lg opacity-90 max-w-xl mx-auto mb-8 font-medium">{siteSettings.special?.description || DEFAULT_SETTINGS.special.description}</p>
               <button onClick={() => document.getElementById('menu')?.scrollIntoView({behavior:'smooth'})} className="bg-orange-500 text-white px-10 py-4 rounded-full font-black uppercase shadow-xl hover:bg-white hover:text-orange-500 transition-all active:scale-95">Меню</button>
             </div>
           </section>

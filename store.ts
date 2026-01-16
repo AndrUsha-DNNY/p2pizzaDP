@@ -4,6 +4,16 @@ import { INITIAL_PIZZAS } from './constants';
 
 export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 
+export const DEFAULT_SETTINGS = {
+  logo: DEFAULT_LOGO,
+  phone: '+380 00 000 00 00',
+  special: {
+    title: 'СВІЖА. ГАРЯЧА. ТВОЯ.',
+    description: 'Замовляй найкращу піцу в місті!',
+    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=2000'
+  }
+};
+
 const safeFetch = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
@@ -17,7 +27,8 @@ const safeFetch = async (url: string, options?: RequestInit) => {
 
 // --- SETTINGS (SYNCED VIA MONGODB) ---
 export const fetchSettings = async () => {
-  return await safeFetch('/api/settings');
+  const data = await safeFetch('/api/settings');
+  return data || DEFAULT_SETTINGS;
 };
 
 export const saveSettingsToDB = async (settings: any) => {
@@ -129,7 +140,6 @@ export const registerNewUser = (user: any) => {
 };
 
 // Legacy fallbacks and setters for local state
-// Fix: implementing missing local storage helpers required by legacy components like components/AdminPanel.tsx
 export const getStoredLogo = () => localStorage.getItem('p2pizza_logo') || DEFAULT_LOGO;
 export const saveLogo = (logo: string) => localStorage.setItem('p2pizza_logo', logo);
 
@@ -150,7 +160,6 @@ export const saveTelegramConfig = (token: string, chatId: string) => {
 
 export const setupWebhook = async () => {
   const settings = await fetchSettings();
-  // Fix: Use token from settings or fallback to legacy config if needed
   const token = settings?.tgToken || getTelegramConfig().token;
   if (!token) return;
   const url = `${window.location.origin}/api/webhook?token=${token}`;
