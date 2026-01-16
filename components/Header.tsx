@@ -10,22 +10,36 @@ interface HeaderProps {
   onNavigate: (view: string) => void;
   cartCount: number;
   onOpenCart: () => void;
+  /** Site settings fetched from the global state */
+  siteSettings: any;
 }
 
-const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onNavigate, cartCount, onOpenCart }) => {
-  const [logo, setLogo] = useState(getStoredLogo());
-  const [phone, setPhone] = useState(getStoredShopPhone());
+const Header: React.FC<HeaderProps> = ({ user, onOpenAuth, onNavigate, cartCount, onOpenCart, siteSettings }) => {
+  // Use siteSettings if available, fallback to getStoredLogo/Phone
+  const [logo, setLogo] = useState(siteSettings?.logo || getStoredLogo());
+  const [phone, setPhone] = useState(siteSettings?.phone || getStoredShopPhone());
+
+  useEffect(() => {
+    // Keep local states in sync with props
+    if (siteSettings) {
+      setLogo(siteSettings.logo || DEFAULT_LOGO);
+      setPhone(siteSettings.phone || '+380 00 000 00 00');
+    }
+  }, [siteSettings]);
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setLogo(getStoredLogo());
-      setPhone(getStoredShopPhone());
+      // Refresh local fallbacks if needed
+      if (!siteSettings) {
+        setLogo(getStoredLogo());
+        setPhone(getStoredShopPhone());
+      }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [siteSettings]);
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md shadow-sm border-b border-orange-100">

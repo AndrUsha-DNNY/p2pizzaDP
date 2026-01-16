@@ -3,8 +3,14 @@ import React from 'react';
 import { Instagram, Facebook, Music, Phone, MapPin } from 'lucide-react';
 import { getStoredShopPhone } from '../store';
 
-const Footer: React.FC = () => {
-  const phone = getStoredShopPhone();
+/** Prop definition for Footer component */
+interface FooterProps {
+  siteSettings: any;
+}
+
+const Footer: React.FC<FooterProps> = ({ siteSettings }) => {
+  // Use data from siteSettings or fallback to local storage
+  const phone = siteSettings?.phone || getStoredShopPhone();
 
   return (
     <footer className="bg-black text-white py-12 px-4 mt-20">
@@ -14,7 +20,7 @@ const Footer: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-xl overflow-hidden">
-                <img src="https://i.ibb.co/3ykCjFz/p2p-logo.png" alt="P2P" className="w-full h-full object-cover" />
+                <img src={siteSettings?.logo || "https://i.ibb.co/3ykCjFz/p2p-logo.png"} alt="P2P" className="w-full h-full object-cover" />
               </div>
               <span className="text-2xl font-black tracking-tighter">P2PIZZA</span>
             </div>
