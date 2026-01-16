@@ -111,7 +111,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
                     <span className="text-red-500 font-black text-xs">1. MONGODB_URI</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зайдіть у Vercel -> Settings -> Environment Variables та додайте вашу адресу MongoDB.</p>
+                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зайдіть у Vercel → Settings → Environment Variables та додайте вашу адресу MongoDB.</p>
                   </div>
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
                     <span className="text-red-500 font-black text-xs">2. REDEPLOY</span>
