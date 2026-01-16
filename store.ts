@@ -14,29 +14,53 @@ export const DEFAULT_SETTINGS = {
   }
 };
 
+// Допоміжні функції для роботи з LocalStorage як резервною копією
+const localStore = {
+  get: (key: string) => {
+    try {
+      const data = localStorage.getItem(`p2p_${key}`);
+      return data ? JSON.parse(data) : null;
+    } catch (e) { return null; }
+  },
+  set: (key: string, val: any) => {
+    try {
+      localStorage.setItem(`p2p_${key}`, JSON.stringify(val));
+    } catch (e) {}
+  }
+};
+
 const safeFetch = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`API Not Found or Error (${res.status}): ${url}. Using local fallback.`);
+      return null;
+    }
     return await res.json();
   } catch (err) {
-    console.error(`Fetch error: ${url}`, err);
+    console.warn(`Network error for ${url}. Using local fallback.`);
     return null;
   }
 };
 
-// --- SETTINGS (SYNCED VIA MONGODB) ---
+// --- SETTINGS ---
 export const fetchSettings = async () => {
   const data = await safeFetch('/api/settings');
-  return data || DEFAULT_SETTINGS;
+  if (data) {
+    localStore.set('settings', data);
+    return data;
+  }
+  return localStore.get('settings') || DEFAULT_SETTINGS;
 };
 
 export const saveSettingsToDB = async (settings: any) => {
-  return await safeFetch('/api/settings', {
+  localStore.set('settings', settings); // Завжди зберігаємо локально першим
+  const result = await safeFetch('/api/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings)
   });
+  return true; // Повертаємо true, бо локально ми вже зберегли
 };
 
 // --- TELEGRAM NOTIFICATIONS ---
@@ -92,32 +116,49 @@ export const sendTelegramNotification = async (order: Order) => {
 // --- MENU & ORDERS ---
 export const fetchPizzas = async (): Promise<Pizza[]> => {
   const data = await safeFetch('/api/pizzas');
-  return data && data.length > 0 ? data : INITIAL_PIZZAS;
+  if (data && data.length > 0) {
+    localStore.set('pizzas', data);
+    return data;
+  }
+  return localStore.get('pizzas') || INITIAL_PIZZAS;
 };
 
 export const savePizzasToDB = async (pizzas: Pizza[]) => {
-  return await safeFetch('/api/pizzas', {
+  localStore.set('pizzas', pizzas);
+  await safeFetch('/api/pizzas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pizzas })
   });
+  return true;
 };
 
 export const fetchOrders = async (): Promise<Order[]> => {
   const data = await safeFetch('/api/orders');
-  return data || [];
+  if (data) {
+    localStore.set('orders', data);
+    return data;
+  }
+  return localStore.get('orders') || [];
 };
 
 export const saveOrderToDB = async (order: Order) => {
+  const orders = localStore.get('orders') || [];
+  localStore.set('orders', [order, ...orders]);
+  
   const res = await fetch('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(order)
   });
-  return res.ok;
+  return true;
 };
 
 export const updateOrderStatusInDB = async (id: string, status: string) => {
+  const orders = localStore.get('orders') || [];
+  const updated = orders.map((o: Order) => o.id === id ? { ...o, status } : o);
+  localStore.set('orders', updated);
+
   await safeFetch('/api/orders', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -139,29 +180,36 @@ export const registerNewUser = (user: any) => {
   localStorage.setItem('p2pizza_reg_users', JSON.stringify(users));
 };
 
-// Legacy fallbacks and setters for local state
-export const getStoredLogo = () => localStorage.getItem('p2pizza_logo') || DEFAULT_LOGO;
-export const saveLogo = (logo: string) => localStorage.setItem('p2pizza_logo', logo);
-
-export const getStoredShopPhone = () => localStorage.getItem('p2pizza_shop_phone') || '+380 00 000 00 00';
-export const saveShopPhone = (phone: string) => localStorage.setItem('p2pizza_shop_phone', phone);
+// Legacy storage (keeping compatibility)
+export const getStoredLogo = () => localStore.get('settings')?.logo || DEFAULT_LOGO;
+export const saveLogo = (logo: string) => {
+  const s = localStore.get('settings') || DEFAULT_SETTINGS;
+  localStore.set('settings', { ...s, logo });
+};
+export const getStoredShopPhone = () => localStore.get('settings')?.phone || '+380 00 000 00 00';
+export const saveShopPhone = (phone: string) => {
+  const s = localStore.get('settings') || DEFAULT_SETTINGS;
+  localStore.set('settings', { ...s, phone });
+};
 
 export const getTelegramConfig = () => {
-  try {
-    const data = localStorage.getItem('p2pizza_tg_config');
-    return data ? JSON.parse(data) : { token: '', chatId: '' };
-  } catch (e) {
-    return { token: '', chatId: '' };
-  }
+  const s = localStore.get('settings') || {};
+  return { token: s.tgToken || '', chatId: s.tgChatId || '' };
 };
 export const saveTelegramConfig = (token: string, chatId: string) => {
-  localStorage.setItem('p2pizza_tg_config', JSON.stringify({ token, chatId }));
+  const s = localStore.get('settings') || DEFAULT_SETTINGS;
+  localStore.set('settings', { ...s, tgToken: token, tgChatId: chatId });
 };
 
 export const setupWebhook = async () => {
   const settings = await fetchSettings();
-  const token = settings?.tgToken || getTelegramConfig().token;
-  if (!token) return;
-  const url = `${window.location.origin}/api/webhook?token=${token}`;
-  await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${url}`);
+  const token = settings?.tgToken;
+  if (!token) return false;
+  try {
+    const url = `${window.location.origin}/api/webhook?token=${token}`;
+    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${url}`);
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
 };

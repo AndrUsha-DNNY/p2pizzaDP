@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Pizza, Order, OrderStatus } from './types';
-import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package } from 'lucide-react';
+import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package, AlertCircle } from 'lucide-react';
 import { savePizzasToDB, saveSettingsToDB, setupWebhook } from './store';
 
 interface AdminPanelProps {
@@ -20,22 +20,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
   const [editForm, setEditForm] = useState<Partial<Pizza>>({});
   const [localSettings, setLocalSettings] = useState(siteSettings);
   const [status, setStatus] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
 
   const handleSaveSettings = async () => {
+    setIsError(false);
     setStatus('Зберігання...');
-    const ok = await saveSettingsToDB(localSettings);
-    if (ok) {
-      onUpdateSettings(localSettings);
-      setStatus('Сайт оновлено для всіх!');
-      setTimeout(() => setStatus(null), 3000);
+    try {
+      const ok = await saveSettingsToDB(localSettings);
+      if (ok) {
+        onUpdateSettings(localSettings);
+        setStatus('Сайт оновлено для всіх!');
+        setTimeout(() => setStatus(null), 3000);
+      } else {
+        throw new Error('Server returned error');
+      }
+    } catch (e) {
+      console.error(e);
+      setIsError(true);
+      setStatus('Помилка збереження. Перевірте базу даних.');
+      setTimeout(() => { setStatus(null); setIsError(false); }, 5000);
     }
   };
 
   const handleToggleWebhook = async () => {
     setStatus('Активація кнопок...');
-    await setupWebhook();
-    setStatus('Telegram Webhook активний!');
-    setTimeout(() => setStatus(null), 3000);
+    const ok = await setupWebhook();
+    if (ok) {
+      setStatus('Telegram Webhook активний!');
+    } else {
+      setIsError(true);
+      setStatus('Помилка активації кнопок.');
+    }
+    setTimeout(() => { setStatus(null); setIsError(false); }, 3000);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: string) => {
@@ -212,7 +228,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
       )}
 
       {status && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-black text-white px-10 py-4 rounded-full font-black text-xs uppercase z-[300] shadow-2xl animate-in slide-in-from-bottom">
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 px-10 py-4 rounded-full font-black text-xs uppercase z-[300] shadow-2xl animate-in slide-in-from-bottom flex items-center gap-2 ${isError ? 'bg-red-600 text-white' : 'bg-black text-white'}`}>
+          {isError && <AlertCircle size={16} />}
           {status}
         </div>
       )}
