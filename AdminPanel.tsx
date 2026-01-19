@@ -104,23 +104,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
                   <AlertCircle className="animate-pulse" /> Увага: Базу даних не знайдено
                 </div>
                 <p className="text-[11px] font-bold text-red-800/70 uppercase leading-relaxed">
-                  Ви розгорнули проект на Vercel, але API видає 404. Це означає, що серверні функції не можуть запуститися. 
-                  <br /><br />
-                  <strong className="text-red-700">Перевірте наступне:</strong>
+                  Ви розгорнули проект на Vercel, але API видає 404. Це означає, що серверні функції не можуть запуститися без вірного посилання MONGODB_URI.
                 </p>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">1. MONGODB_URI</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зайдіть у Vercel → Settings → Environment Variables та додайте вашу адресу MongoDB.</p>
+                    <span className="text-red-500 font-black text-xs">ВАЖЛИВО: ПРИБЕРІТЬ ДУЖКИ</span>
+                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">У вашому паролі swBryZB2ycvLuqJB не повинно бути символів "менше" та "більше".</p>
                   </div>
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">2. REDEPLOY</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Після додавання змінної обов'язково натисніть "Deploy" знову, інакше зміни не набудуть чинності.</p>
+                    <span className="text-red-500 font-black text-xs">Vercel Settings</span>
+                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Додайте MONGODB_URI в Settings - Environment Variables та зробіть Redeploy.</p>
                   </div>
                 </div>
-                <a href="https://vercel.com/docs/projects/environment-variables" target="_blank" className="inline-flex items-center gap-2 text-red-600 font-black text-[10px] uppercase underline decoration-2 underline-offset-4">
-                  Інструкція від Vercel <ExternalLink size={10} />
-                </a>
               </div>
             )}
 

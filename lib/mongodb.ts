@@ -16,11 +16,12 @@ declare global {
 }
 
 if (process.env.NODE_ENV === 'development') {
-  if (!global._mongoClientPromise) {
+  // Use globalThis instead of global to avoid "Cannot find name 'global'" in environments without Node.js types
+  if (!(globalThis as any)._mongoClientPromise) {
     client = new MongoClient(uri, options);
-    global._mongoClientPromise = client.connect();
+    (globalThis as any)._mongoClientPromise = client.connect();
   }
-  clientPromise = global._mongoClientPromise;
+  clientPromise = (globalThis as any)._mongoClientPromise;
 } else {
   client = new MongoClient(uri, options);
   clientPromise = client.connect();
