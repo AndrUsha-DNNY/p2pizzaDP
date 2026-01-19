@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Pizza, Order, OrderStatus } from './types';
-import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package, AlertCircle, CheckCircle2, Database, HelpCircle, RefreshCw, CloudOff, Cloud, ExternalLink } from 'lucide-react';
+import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package, AlertCircle, CheckCircle2, Database, HelpCircle, RefreshCw, CloudOff, Cloud, ExternalLink, Copy } from 'lucide-react';
 import { savePizzasToDB, saveSettingsToDB, setupWebhook } from './store';
 
 interface AdminPanelProps {
@@ -23,6 +23,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
   const [apiWorks, setApiWorks] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
+  // Актуальне посилання, яке надав користувач
+  const MONGO_URI_TEMPLATE = "mongodb+srv://rittefyoutobe_db_user:1zkl4l2W4NYIxOUz@p2pizza.gjw8jsy.mongodb.net/?appName=p2pizza";
+
   const checkConnection = async () => {
     setIsChecking(true);
     try {
@@ -38,6 +41,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
   useEffect(() => {
     checkConnection();
   }, []);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setStatus('Скопійовано!');
+    setTimeout(() => setStatus(null), 2000);
+  };
 
   const handleSaveSettings = async () => {
     setStatus('Збереження...');
@@ -99,21 +108,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
         {activeTab === 'settings' && (
           <div className="max-w-4xl space-y-8 animate-in fade-in duration-300">
             {!apiWorks && (
-              <div className="bg-red-50 border-2 border-red-200 p-8 rounded-[3rem] space-y-4">
+              <div className="bg-red-50 border-2 border-red-200 p-8 rounded-[3rem] space-y-6">
                 <div className="flex items-center gap-3 text-red-600 font-black uppercase text-sm">
-                  <AlertCircle className="animate-pulse" /> Увага: Базу даних не знайдено
+                  <AlertCircle className="animate-pulse" /> Підключіть вашу базу даних
                 </div>
-                <p className="text-[11px] font-bold text-red-800/70 uppercase leading-relaxed">
-                  Ви розгорнули проект на Vercel, але API видає 404. Це означає, що серверні функції не можуть запуститися без вірного посилання MONGODB_URI.
-                </p>
+                <div className="space-y-4">
+                  <p className="text-[11px] font-bold text-red-800/70 uppercase leading-relaxed">
+                    Щоб піци та налаштування зберігалися назавжди, додайте це посилання у Vercel:
+                  </p>
+                  <div className="flex items-center gap-2 bg-white/50 p-4 rounded-2xl border border-red-100 group">
+                    <code className="text-[10px] font-mono font-bold text-red-900 break-all flex-grow">{MONGO_URI_TEMPLATE}</code>
+                    <button onClick={() => copyToClipboard(MONGO_URI_TEMPLATE)} className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600">
+                      <Copy size={16} />
+                    </button>
+                  </div>
+                </div>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">ВАЖЛИВО: ПРИБЕРІТЬ ДУЖКИ</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">У вашому паролі swBryZB2ycvLuqJB не повинно бути символів "менше" та "більше".</p>
+                    <span className="text-red-500 font-black text-xs">КРОК 1: VERCEL</span>
+                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зайдіть у Vercel → Settings → Environment Variables. Додайте <b>MONGODB_URI</b> з цим значенням.</p>
                   </div>
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">Vercel Settings</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Додайте MONGODB_URI в Settings - Environment Variables та зробіть Redeploy.</p>
+                    <span className="text-red-500 font-black text-xs">КРОК 2: REDEPLOY</span>
+                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">На вкладці Deployments зробіть <b>Redeploy</b> останньої версії, щоб зміни вступили в силу.</p>
                   </div>
                 </div>
               </div>
@@ -313,7 +330,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
 
       {status && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 px-10 py-5 bg-black text-white rounded-full font-black text-[10px] uppercase z-[300] shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
-          {status.includes('Збережено') || status.includes('Готово') ? <CheckCircle2 size={16} className="text-green-500" /> : <Zap size={16} className="text-orange-500 animate-pulse" />}
+          {status.includes('Скопійовано') || status.includes('Готово') ? <CheckCircle2 size={16} className="text-green-500" /> : <Zap size={16} className="text-orange-500 animate-pulse" />}
           {status}
         </div>
       )}
