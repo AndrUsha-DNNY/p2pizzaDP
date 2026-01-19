@@ -23,13 +23,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
   const [apiWorks, setApiWorks] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
-  // Нове актуальне посилання, яке надав користувач
+  // Ваше актуальне посилання
   const MONGO_URI_TEMPLATE = "mongodb+srv://rittefyoutobe_db_user:6WbDYmUawtCozGtg@p2pizza.zcsm9m9.mongodb.net/?appName=p2pizza";
 
   const checkConnection = async () => {
     setIsChecking(true);
     try {
       const res = await fetch('/api/settings');
+      // Якщо статус 200 - база працює. Якщо 500 або 404 - не налаштовано змінні середовища.
       setApiWorks(res.ok);
     } catch {
       setApiWorks(false);
@@ -110,11 +111,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
             {!apiWorks && (
               <div className="bg-red-50 border-2 border-red-200 p-8 rounded-[3rem] space-y-6">
                 <div className="flex items-center gap-3 text-red-600 font-black uppercase text-sm">
-                  <AlertCircle className="animate-pulse" /> Налаштуйте підключення до бази даних
+                  <AlertCircle className="animate-pulse" /> БАЗУ НЕ ПІДКЛЮЧЕНО
                 </div>
                 <div className="space-y-4">
                   <p className="text-[11px] font-bold text-red-800/70 uppercase leading-relaxed">
-                    Щоб сайт зберігав зміни назавжди, додайте це посилання у Vercel:
+                    На вашому сайті у Vercel не виявлено налаштувань для бази даних. Скопіюйте цей рядок:
                   </p>
                   <div className="flex items-center gap-2 bg-white/50 p-4 rounded-2xl border border-red-100 group">
                     <code className="text-[10px] font-mono font-bold text-red-900 break-all flex-grow">{MONGO_URI_TEMPLATE}</code>
@@ -125,12 +126,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
                 </div>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">КРОК 1: VERCEL</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Відкрийте Vercel Dashboard → Settings → Environment Variables. Додайте назву <b>MONGODB_URI</b> та вставте скопійований рядок.</p>
+                    <span className="text-red-500 font-black text-xs">КРОК 1</span>
+                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зайдіть у <b>Vercel Settings</b> → <b>Environment Variables</b>. Створіть змінну <b>MONGODB_URI</b>.</p>
                   </div>
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">КРОК 2: REDEPLOY</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Перейдіть на вкладку Deployments, натисніть "..." біля останнього деплою та виберіть <b>Redeploy</b>.</p>
+                    <span className="text-red-500 font-black text-xs">КРОК 2</span>
+                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зробіть <b>Redeploy</b> проекту, щоб сервер побачив цей пароль і підключився до бази.</p>
                   </div>
                 </div>
               </div>
