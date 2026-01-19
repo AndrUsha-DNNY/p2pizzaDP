@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Pizza, Order, OrderStatus } from './types';
-import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package, AlertCircle, CheckCircle2, RefreshCw, CloudOff, Cloud, Copy } from 'lucide-react';
+import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package, AlertCircle, CheckCircle2, RefreshCw, CloudOff, Cloud, Copy, ShieldCheck } from 'lucide-react';
 import { savePizzasToDB, saveSettingsToDB, setupWebhook } from './store';
 
 interface AdminPanelProps {
@@ -21,19 +21,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
   const [localSettings, setLocalSettings] = useState(siteSettings);
   const [status, setStatus] = useState<string | null>(null);
   const [apiWorks, setApiWorks] = useState<boolean | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
-  // Ваше актуальне посилання
   const MONGO_URI_TEMPLATE = "mongodb+srv://rittefyoutobe_db_user:6WbDYmUawtCozGtg@p2pizza.zcsm9m9.mongodb.net/?appName=p2pizza";
 
   const checkConnection = async () => {
     setIsChecking(true);
+    setErrorDetails(null);
     try {
       const res = await fetch('/api/settings');
-      // Якщо статус 200 - база працює. Якщо 500 або 404 - не налаштовано змінні середовища.
-      setApiWorks(res.ok);
-    } catch {
+      if (res.ok) {
+        setApiWorks(true);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Невідома помилка' }));
+        setApiWorks(false);
+        setErrorDetails(err.error || `Код помилки: ${res.status}`);
+      }
+    } catch (e: any) {
       setApiWorks(false);
+      setErrorDetails(e.message);
     } finally {
       setIsChecking(false);
     }
@@ -113,25 +120,40 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
                 <div className="flex items-center gap-3 text-red-600 font-black uppercase text-sm">
                   <AlertCircle className="animate-pulse" /> БАЗУ НЕ ПІДКЛЮЧЕНО
                 </div>
-                <div className="space-y-4">
-                  <p className="text-[11px] font-bold text-red-800/70 uppercase leading-relaxed">
-                    На вашому сайті у Vercel не виявлено налаштувань для бази даних. Скопіюйте цей рядок:
+                
+                <div className="bg-white/50 p-6 rounded-3xl border border-red-100">
+                  <p className="text-[10px] font-black uppercase text-red-500 mb-2">Технічна причина:</p>
+                  <code className="text-[11px] font-mono text-gray-700 bg-gray-100/50 p-2 block rounded-xl break-all">
+                    {errorDetails || "Сервер не повернув відповідь. Перевірте Redeploy у Vercel."}
+                  </code>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100 space-y-3">
+                    <span className="text-red-500 font-black text-xs flex items-center gap-2">
+                       <ShieldCheck size={14}/> КРОК А: ДОЗВІЛ IP (ВАЖЛИВО!)
+                    </span>
+                    <p className="text-[10px] font-bold text-gray-600 uppercase leading-tight">
+                       У MongoDB Atlas зайдіть в <b>Network Access</b> → Натисніть <b>ADD IP ADDRESS</b> → Виберіть <b>ALLOW ACCESS FROM ANYWHERE</b>.
+                    </p>
+                  </div>
+                  <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100 space-y-3">
+                    <span className="text-red-500 font-black text-xs">КРОК Б: VERCEL</span>
+                    <p className="text-[10px] font-bold text-gray-600 uppercase leading-tight">
+                       Переконайтесь, що ви додали <b>MONGODB_URI</b> в налаштуваннях Vercel і зробили <b>REDEPLOY</b> останнього деплою.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  <p className="text-[11px] font-bold text-red-800/70 uppercase leading-relaxed text-center">
+                    Ваш рядок для Vercel:
                   </p>
                   <div className="flex items-center gap-2 bg-white/50 p-4 rounded-2xl border border-red-100 group">
                     <code className="text-[10px] font-mono font-bold text-red-900 break-all flex-grow">{MONGO_URI_TEMPLATE}</code>
                     <button onClick={() => copyToClipboard(MONGO_URI_TEMPLATE)} className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600">
                       <Copy size={16} />
                     </button>
-                  </div>
-                </div>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">КРОК 1</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зайдіть у <b>Vercel Settings</b> → <b>Environment Variables</b>. Створіть змінну <b>MONGODB_URI</b>.</p>
-                  </div>
-                  <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100">
-                    <span className="text-red-500 font-black text-xs">КРОК 2</span>
-                    <p className="text-[10px] font-bold text-gray-600 mt-2 uppercase leading-tight">Зробіть <b>Redeploy</b> проекту, щоб сервер побачив цей пароль і підключився до бази.</p>
                   </div>
                 </div>
               </div>
