@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { User } from '../types';
-import { getAdminPassword, getRegisteredUsers, registerNewUser, getStoredLogo } from '../store';
+import { getRegisteredUsers, registerNewUser, getStoredLogo, fetchSettings, DEFAULT_SETTINGS } from '../store';
 
 interface AuthProps {
   isOpen: boolean;
@@ -18,21 +18,30 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [adminPass, setAdminPass] = useState(DEFAULT_SETTINGS.adminPassword);
+  
   const logo = getStoredLogo();
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchSettings().then(s => {
+        if (s?.adminPassword) setAdminPass(s.adminPassword);
+      });
+    }
+  }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    if (password.length < 8 || password.length > 16) {
-      setError('Пароль має бути від 8 до 16 символів');
-      return;
-    }
-
     const registeredUsers = getRegisteredUsers();
 
     if (isRegister) {
+      if (password.length < 4) {
+        setError('Пароль занадто короткий');
+        return;
+      }
       const exists = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
       if (exists) {
         setError('Такий акаунт вже є');
@@ -50,16 +59,16 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
       };
       
       registerNewUser(newUser);
-      setSuccess('Акаунт успішно створено! Тепер увійдіть.');
+      setSuccess('Акаунт створено! Увійдіть.');
       setIsRegister(false);
       setPassword('');
     } else {
-      if (email.toLowerCase() === 'admin@p2pizza.com') {
-        const storedAdminPass = getAdminPassword();
-        if (password === storedAdminPass) {
+      // ADMIN LOGIN
+      if (email.toLowerCase() === 'admin@p2pizza.com' || email.toLowerCase() === 'admin') {
+        if (password === adminPass) {
           onLogin({
             id: 'admin-id',
-            email,
+            email: 'admin@p2pizza.com',
             name: 'Адміністратор',
             role: 'admin',
             favorites: [],
@@ -74,13 +83,8 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
 
       const user = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
       
-      if (!user) {
-        setError('Такого акаунту немає');
-        return;
-      }
-
-      if (user.password !== password) {
-        setError('Невірний пароль');
+      if (!user || user.password !== password) {
+        setError('Невірна пошта або пароль');
         return;
       }
 
@@ -102,89 +106,48 @@ const Auth: React.FC<AuthProps> = ({ isOpen, onClose, onLogin, onLogout, current
         {currentUser ? (
           <div className="py-6">
             <div className="w-24 h-24 bg-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl overflow-hidden border-4 border-white">
-              <img src={logo} alt="P2Pizza User" className="w-full h-full object-cover" />
+              <img src={logo} className="w-full h-full object-cover" />
             </div>
             <h2 className="text-2xl font-black mb-1 uppercase tracking-tight">{currentUser.name}</h2>
             <p className="text-gray-400 mb-8 font-bold text-xs uppercase tracking-widest">{currentUser.email}</p>
-            <button 
-              onClick={onLogout}
-              className="w-full py-4 rounded-2xl bg-black text-white font-black uppercase text-sm hover:bg-orange-600 transition-all shadow-lg active:scale-95"
-            >
-              Вийти з акаунту
-            </button>
+            <button onClick={onLogout} className="w-full py-4 rounded-2xl bg-black text-white font-black uppercase text-sm hover:bg-orange-600 transition-all shadow-lg active:scale-95">Вийти</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="text-left">
             <div className="flex justify-center mb-8">
                <div className="w-20 h-20 bg-orange-500 rounded-2xl overflow-hidden shadow-lg">
-                  <img src={logo} alt="P2Pizza Logo" className="w-full h-full object-cover" />
+                  <img src={logo} className="w-full h-full object-cover" />
                </div>
             </div>
             
-            <h2 className="text-3xl font-black mb-2 uppercase tracking-tight leading-none text-center">
-              {isRegister ? 'Створити акаунт' : 'Увійти до P2P'}
+            <h2 className="text-3xl font-black mb-2 uppercase tracking-tight text-center">
+              {isRegister ? 'Реєстрація' : 'Увійти'}
             </h2>
-            <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mb-8 text-center">
-              {isRegister ? 'Приєднуйтесь до нашої піца-родини' : 'Ваша улюблена піца чекає'}
-            </p>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-black uppercase tracking-tight flex items-center gap-2 border border-red-100 animate-in shake-x duration-300">
+              <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-black uppercase tracking-tight flex items-center gap-2 border border-red-100">
                 <AlertCircle size={16} /> {error}
               </div>
             )}
 
             {success && (
-              <div className="mb-6 p-4 bg-green-50 text-green-600 rounded-2xl text-xs font-black uppercase tracking-tight flex items-center gap-2 border border-green-100 animate-in zoom-in duration-300">
+              <div className="mb-6 p-4 bg-green-50 text-green-600 rounded-2xl text-[10px] font-black uppercase tracking-tight flex items-center gap-2 border border-green-100">
                 <CheckCircle2 size={16} /> {success}
               </div>
             )}
 
             <div className="space-y-4 mb-8">
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500" size={20} />
-                <input 
-                  type="email" 
-                  required
-                  placeholder="Електронна пошта" 
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-orange-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-sm"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500" size={20} />
-                <input 
-                  type="password" 
-                  required
-                  placeholder="Пароль (8-16 символів)" 
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-orange-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-sm"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  minLength={8}
-                  maxLength={16}
-                />
-              </div>
+              <input type="text" required placeholder="Електронна пошта або 'admin'" className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-orange-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input type="password" required placeholder="Пароль" className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent focus:border-orange-500 focus:bg-white rounded-2xl outline-none transition-all font-bold text-sm" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
 
-            <button 
-              type="submit"
-              className="w-full py-5 bg-orange-500 text-white font-black uppercase tracking-widest text-sm rounded-[2rem] shadow-xl shadow-orange-100 hover:bg-black transition-all mb-4 active:scale-95"
-            >
+            <button type="submit" className="w-full py-5 bg-orange-500 text-white font-black uppercase tracking-widest text-sm rounded-[2rem] shadow-xl shadow-orange-100 hover:bg-black transition-all mb-4 active:scale-95">
               {isRegister ? 'Зареєструватися' : 'Увійти'}
             </button>
 
             <p className="text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
-              {isRegister ? 'Вже маєте акаунт?' : 'Ще не маєте акаунту?'} {' '}
-              <button 
-                type="button"
-                onClick={() => {
-                   setIsRegister(!isRegister);
-                   setError(null);
-                   setSuccess(null);
-                }}
-                className="text-orange-500 hover:underline"
-              >
+              {isRegister ? 'Маєте акаунт?' : 'Немає акаунту?'} {' '}
+              <button type="button" onClick={() => setIsRegister(!isRegister)} className="text-orange-500 hover:underline">
                 {isRegister ? 'Увійти' : 'Реєстрація'}
               </button>
             </p>

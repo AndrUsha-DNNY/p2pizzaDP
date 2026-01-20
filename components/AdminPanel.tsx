@@ -1,12 +1,11 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Pizza, Order, OrderStatus } from '../types.ts';
 import { 
   Edit2, Trash2, X, Send, Settings, Phone, List, ShoppingBag, Upload, Camera, Zap, Image as ImageIcon
 } from 'lucide-react';
 import { 
-  getStoredShopPhone, saveShopPhone, getTelegramConfig, 
-  saveTelegramConfig, getStoredLogo, saveLogo, setupWebhook
+  getStoredShopPhone, getStoredLogo, setupWebhook, fetchSettings, saveSettingsToDB
 } from '../store.ts';
 
 interface AdminPanelProps {
@@ -25,14 +24,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
   const [shopPhone, setShopPhone] = useState(getStoredShopPhone());
   const [siteLogo, setSiteLogo] = useState(getStoredLogo());
   
-  const tgCfg = getTelegramConfig();
-  const [tgToken, setTgToken] = useState(tgCfg.token);
-  const [tgChatId, setTgChatId] = useState(tgCfg.chatId);
+  // Local state for Telegram settings which will be populated from DB
+  const [tgToken, setTgToken] = useState('');
+  const [tgChatId, setTgChatId] = useState('');
   
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const logoFileRef = useRef<HTMLInputElement>(null);
   const pizzaFileRef = useRef<HTMLInputElement>(null);
+
+  // Load settings on mount to populate all fields including Telegram
+  useEffect(() => {
+    const load = async () => {
+      const settings = await fetchSettings();
+      if (settings) {
+        setTgToken(settings.tgToken || '');
+        setTgChatId(settings.tgChatId || '');
+        if (settings.phone) setShopPhone(settings.phone);
+        if (settings.logo) setSiteLogo(settings.logo);
+      }
+    };
+    load();
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'pizza') => {
     const file = e.target.files?.[0];
@@ -47,12 +60,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
     }
   };
 
-  const handleSaveAll = () => {
-    saveShopPhone(shopPhone);
-    saveLogo(siteLogo);
-    saveTelegramConfig(tgToken, tgChatId);
+  const handleSaveAll = async () => {
+    // Fetch latest settings to merge with changes and preserve unmanaged fields
+    const currentSettings = await fetchSettings();
+    const updatedSettings = {
+      ...currentSettings,
+      phone: shopPhone,
+      logo: siteLogo,
+      tgToken: tgToken,
+      tgChatId: tgChatId
+    };
     
-    setStatusMessage('Налаштування збережено!');
+    const success = await saveSettingsToDB(updatedSettings);
+    
+    if (success) {
+      setStatusMessage('Налаштування збережено!');
+    } else {
+      setStatusMessage('Помилка збереження!');
+    }
     setTimeout(() => setStatusMessage(null), 3000);
     window.dispatchEvent(new Event('storage'));
   };
