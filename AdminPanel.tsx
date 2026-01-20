@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Pizza, Order, OrderStatus } from './types';
-import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package, AlertCircle, CheckCircle2, RefreshCw, CloudOff, Cloud, Copy, ShieldCheck } from 'lucide-react';
+import { Edit2, Trash2, X, Send, Phone, Camera, Sparkles, ImageIcon, Zap, Package, AlertCircle, CheckCircle2, RefreshCw, CloudOff, Cloud, Copy, ShieldCheck, Terminal } from 'lucide-react';
 import { savePizzasToDB, saveSettingsToDB, setupWebhook } from './store';
 
 interface AdminPanelProps {
@@ -33,14 +33,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
       const res = await fetch('/api/settings');
       if (res.ok) {
         setApiWorks(true);
+        const data = await res.json();
+        if (data && data.id) setApiWorks(true);
       } else {
-        const err = await res.json().catch(() => ({ error: 'Невідома помилка' }));
         setApiWorks(false);
-        setErrorDetails(err.error || `Код помилки: ${res.status}`);
+        const text = await res.text();
+        if (text.includes("MONGODB_URI")) {
+          setErrorDetails("Змінна MONGODB_URI не знайдена у Vercel. Ви додали її?");
+        } else {
+          setErrorDetails(`Сервер повернув помилку ${res.status}. Можливо, треба зробити Redeploy.`);
+        }
       }
     } catch (e: any) {
       setApiWorks(false);
-      setErrorDetails(e.message);
+      setErrorDetails(e.message || "Мережева помилка при зверненні до /api/settings");
     } finally {
       setIsChecking(false);
     }
@@ -121,33 +127,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ pizzas, onUpdatePizzas, orders,
                   <AlertCircle className="animate-pulse" /> БАЗУ НЕ ПІДКЛЮЧЕНО
                 </div>
                 
-                <div className="bg-white/50 p-6 rounded-3xl border border-red-100">
-                  <p className="text-[10px] font-black uppercase text-red-500 mb-2">Технічна причина:</p>
-                  <code className="text-[11px] font-mono text-gray-700 bg-gray-100/50 p-2 block rounded-xl break-all">
-                    {errorDetails || "Сервер не повернув відповідь. Перевірте Redeploy у Vercel."}
-                  </code>
-                </div>
+                {errorDetails && (
+                  <div className="bg-white/50 p-6 rounded-3xl border border-red-100">
+                    <p className="text-[10px] font-black uppercase text-red-500 mb-2 flex items-center gap-2"><Terminal size={12}/> Лог помилки:</p>
+                    <code className="text-[11px] font-mono text-gray-700 bg-gray-100/50 p-2 block rounded-xl break-all">
+                      {errorDetails}
+                    </code>
+                  </div>
+                )}
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100 space-y-3">
                     <span className="text-red-500 font-black text-xs flex items-center gap-2">
-                       <ShieldCheck size={14}/> КРОК А: ДОЗВІЛ IP (ВАЖЛИВО!)
+                       <ShieldCheck size={14}/> 1. ПЕРЕВІРТЕ IP ACCESS
                     </span>
                     <p className="text-[10px] font-bold text-gray-600 uppercase leading-tight">
-                       У MongoDB Atlas зайдіть в <b>Network Access</b> → Натисніть <b>ADD IP ADDRESS</b> → Виберіть <b>ALLOW ACCESS FROM ANYWHERE</b>.
+                       В MongoDB Atlas: <b>Network Access</b> → <b>Allow Access from Anywhere</b> (0.0.0.0/0). Без цього Vercel не зможе зайти в базу.
                     </p>
                   </div>
                   <div className="bg-white/80 p-5 rounded-3xl shadow-sm border border-red-100 space-y-3">
-                    <span className="text-red-500 font-black text-xs">КРОК Б: VERCEL</span>
+                    <span className="text-red-500 font-black text-xs">2. ЗРОБІТЬ REDEPLOY</span>
                     <p className="text-[10px] font-bold text-gray-600 uppercase leading-tight">
-                       Переконайтесь, що ви додали <b>MONGODB_URI</b> в налаштуваннях Vercel і зробили <b>REDEPLOY</b> останнього деплою.
+                       Vercel бачить нові змінні ТІЛЬКИ після нового деплою. Зайдіть в <b>Deployments</b> → <b>Redeploy</b>.
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-4 pt-4">
                   <p className="text-[11px] font-bold text-red-800/70 uppercase leading-relaxed text-center">
-                    Ваш рядок для Vercel:
+                    Ваш рядок (перевірте назву MONGODB_URI):
                   </p>
                   <div className="flex items-center gap-2 bg-white/50 p-4 rounded-2xl border border-red-100 group">
                     <code className="text-[10px] font-mono font-bold text-red-900 break-all flex-grow">{MONGO_URI_TEMPLATE}</code>

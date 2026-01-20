@@ -2,7 +2,7 @@
 import { MongoClient, MongoClientOptions } from 'mongodb';
 
 if (!process.env.MONGODB_URI) {
-  throw new Error('Please add your Mongo URI to environment variables');
+  throw new Error('Please add your MONGODB_URI to Vercel environment variables');
 }
 
 const uri = process.env.MONGODB_URI;
@@ -16,15 +16,20 @@ declare global {
 }
 
 if (process.env.NODE_ENV === 'development') {
-  // Use globalThis instead of global to avoid "Cannot find name 'global'" in environments without Node.js types
   if (!(globalThis as any)._mongoClientPromise) {
     client = new MongoClient(uri, options);
-    (globalThis as any)._mongoClientPromise = client.connect();
+    (globalThis as any)._mongoClientPromise = client.connect().catch(err => {
+      console.error("MongoDB Connection Error:", err);
+      throw err;
+    });
   }
   clientPromise = (globalThis as any)._mongoClientPromise;
 } else {
   client = new MongoClient(uri, options);
-  clientPromise = client.connect();
+  clientPromise = client.connect().catch(err => {
+    console.error("MongoDB Production Connection Error:", err);
+    throw err;
+  });
 }
 
 export default clientPromise;
