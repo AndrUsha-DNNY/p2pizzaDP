@@ -8,7 +8,7 @@ import Auth from './components/Auth.tsx';
 import AdminPanel from './AdminPanel.tsx';
 import CookingTracker from './components/CookingTracker.tsx';
 import Footer from './components/Footer.tsx';
-import { Pizza, CartItem, Order, User, OrderStatus, SiteSpecial } from './types.ts';
+import { Pizza, CartItem, Order, User, OrderStatus } from './types.ts';
 import { 
   fetchPizzas, savePizzasToDB, getStoredUser, saveUser, 
   fetchOrders, saveOrderToDB, updateOrderStatusInDB, fetchSettings, sendTelegramNotification, DEFAULT_SETTINGS
@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [siteSettings, setSiteSettings] = useState<any>(DEFAULT_SETTINGS);
+  const [flyingPizzas, setFlyingPizzas] = useState<{id: number, x: number, y: number, targetX: number, targetY: number, img: string}[]>([]);
 
   const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
 
@@ -37,9 +38,7 @@ const App: React.FC = () => {
       if (p) setPizzas(p);
       if (o) setOrders(o);
       if (s) setSiteSettings(s);
-    } catch (err) {
-      console.error("Data refresh failed", err);
-    }
+    } catch (err) {}
   };
 
   useEffect(() => {
@@ -50,9 +49,36 @@ const App: React.FC = () => {
       setIsLoading(false);
     };
     init();
-    const interval = setInterval(refreshAll, 15000); // Синхронізація кожні 15 сек
+    const interval = setInterval(refreshAll, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleAddToCart = (p: Pizza, rect: DOMRect) => {
+    const target = document.getElementById('cart-icon-target')?.getBoundingClientRect();
+    if (target) {
+      const flyId = Date.now();
+      setFlyingPizzas(prev => [...prev, {
+        id: flyId,
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        targetX: target.left + target.width / 2,
+        targetY: target.top + target.height / 2,
+        img: p.image || DEFAULT_SETTINGS.logo
+      }]);
+      setTimeout(() => {
+        setFlyingPizzas(prev => prev.filter(f => f.id !== flyId));
+        setCartItems(prev => {
+          const exist = prev.find(i => i.id === p.id);
+          return exist ? prev.map(i => i.id === p.id ? {...i, quantity: i.quantity + 1} : i) : [...prev, {...p, quantity: 1}];
+        });
+      }, 800);
+    } else {
+      setCartItems(prev => {
+        const exist = prev.find(i => i.id === p.id);
+        return exist ? prev.map(i => i.id === p.id ? {...i, quantity: i.quantity + 1} : i) : [...prev, {...p, quantity: 1}];
+      });
+    }
+  };
 
   const handlePlaceOrder = async (orderData: Partial<Order>) => {
     const newOrder: Order = {
@@ -111,6 +137,40 @@ const App: React.FC = () => {
         siteSettings={siteSettings}
       />
       
+      {/* Flying Pizza Animations */}
+      {flyingPizzas.map(f => (
+        <div 
+          key={f.id}
+          className="fixed pointer-events-none z-[200] w-20 h-20 rounded-full shadow-2xl border-2 border-white overflow-hidden"
+          style={{
+            left: 0,
+            top: 0,
+            transform: `translate(${f.x - 40}px, ${f.y - 40}px)`,
+            animation: `flyToCart 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards`
+          }}
+        >
+          <img src={f.img} className="w-full h-full object-cover" />
+        </div>
+      ))}
+
+      <style>{`
+        @keyframes flyToCart {
+          0% { transform: translate(var(--startX), var(--startY)) scale(1) rotate(0deg); opacity: 1; }
+          100% { 
+            left: ${flyingPizzas[0]?.targetX || 0}px; 
+            top: ${flyingPizzas[0]?.targetY || 0}px;
+            transform: translate(-50%, -50%) scale(0.1) rotate(360deg); 
+            opacity: 0.5; 
+          }
+        }
+        ${flyingPizzas.map(f => `
+          @keyframes flyToCart-${f.id} {
+            0% { transform: translate(${f.x - 40}px, ${f.y - 40}px) scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: translate(${f.targetX - 10}px, ${f.targetY - 10}px) scale(0.1) rotate(720deg); opacity: 0; }
+          }
+        `).join('')}
+      `}</style>
+
       {currentView === 'home' && (
         <>
           <section className="relative h-[60vh] flex items-center justify-center overflow-hidden">
@@ -151,10 +211,7 @@ const App: React.FC = () => {
               <PizzaCard 
                 key={(item as Pizza).id} 
                 pizza={item as Pizza} 
-                onAddToCart={(p, r) => setCartItems(prev => {
-                  const exist = prev.find(i => i.id === p.id);
-                  return exist ? prev.map(i => i.id === p.id ? {...i, quantity: i.quantity + 1} : i) : [...prev, {...p, quantity: 1}];
-                })} 
+                onAddToCart={handleAddToCart} 
                 isFavorite={user?.favorites.includes((item as Pizza).id) || false} 
                 onToggleFavorite={(id) => {
                   if (!user) return setIsAuthOpen(true);

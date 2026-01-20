@@ -7,7 +7,7 @@ export const DEFAULT_LOGO = 'https://i.ibb.co/3ykCjFz/p2p-logo.png';
 export const DEFAULT_SETTINGS = {
   logo: DEFAULT_LOGO,
   phone: '+380 00 000 00 00',
-  adminPassword: 'admin', // Початковий пароль
+  adminPassword: 'admin',
   tgToken: '8214069041:AAHHuSD_XQjcaf47pQmfIzCWkug9eQCPc9c',
   tgChatId: '920963284',
   special: {
@@ -30,18 +30,16 @@ const localCache = {
 const apiRequest = async (url: string, options?: RequestInit) => {
   try {
     const res = await fetch(url, options);
-    if (res.status === 404) return { error: '404', data: null };
-    if (!res.ok) return { error: 'server_error', data: null };
+    if (!res.ok) throw new Error('API Error');
     return { error: null, data: await res.json() };
   } catch (err) {
-    return { error: 'network_error', data: null };
+    return { error: 'error', data: null };
   }
 };
 
-// --- SETTINGS ---
 export const fetchSettings = async () => {
-  const { error, data } = await apiRequest('/api/settings');
-  if (data && !error) {
+  const { data } = await apiRequest('/api/settings');
+  if (data && data.id) {
     localCache.set('settings', data);
     return data;
   }
@@ -58,9 +56,8 @@ export const saveSettingsToDB = async (settings: any) => {
   return !error;
 };
 
-// --- MENU & ORDERS ---
 export const fetchPizzas = async (): Promise<Pizza[]> => {
-  const { error, data } = await apiRequest('/api/pizzas');
+  const { data } = await apiRequest('/api/pizzas');
   if (data && Array.isArray(data) && data.length > 0) {
     localCache.set('pizzas', data);
     return data;
@@ -79,7 +76,7 @@ export const savePizzasToDB = async (pizzas: Pizza[]) => {
 };
 
 export const fetchOrders = async (): Promise<Order[]> => {
-  const { error, data } = await apiRequest('/api/orders');
+  const { data } = await apiRequest('/api/orders');
   if (data && Array.isArray(data)) {
     localCache.set('orders', data);
     return data;
@@ -90,7 +87,6 @@ export const fetchOrders = async (): Promise<Order[]> => {
 export const saveOrderToDB = async (order: Order) => {
   const current = localCache.get('orders') || [];
   localCache.set('orders', [order, ...current]);
-  
   const { error } = await apiRequest('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -103,7 +99,6 @@ export const updateOrderStatusInDB = async (id: string, status: string) => {
   const current = localCache.get('orders') || [];
   const updated = current.map((o: any) => o.id === id ? { ...o, status } : o);
   localCache.set('orders', updated);
-
   const { error } = await apiRequest('/api/orders', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -112,7 +107,6 @@ export const updateOrderStatusInDB = async (id: string, status: string) => {
   return !error;
 };
 
-// --- TELEGRAM ---
 export const sendTelegramNotification = async (order: Order) => {
   const settings = await fetchSettings();
   const token = settings?.tgToken || DEFAULT_SETTINGS.tgToken;
@@ -129,10 +123,11 @@ export const sendTelegramNotification = async (order: Order) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
     });
-  } catch (e) {}
+  } catch (e) {
+    console.error("TG Send Error", e);
+  }
 };
 
-// --- AUTH ---
 export const getStoredUser = () => {
   const data = localStorage.getItem('p2pizza_user');
   return data ? JSON.parse(data) : null;
